@@ -18,469 +18,526 @@
   {
     "imports": {
       "react": "https://esm.sh/react@18.2.0",
-      "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime",
-      "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-      "recharts": "https://esm.sh/recharts@2.12.7?deps=react@18.2.0,react-dom@18.2.0"
+      "react/": "https://esm.sh/react@18.2.0/",
+      "react-dom": "https://esm.sh/react-dom@18.2.0",
+      "react-dom/": "https://esm.sh/react-dom@18.2.0/",
+      "recharts": "https://esm.sh/recharts@2.12.7?external=react,react-dom"
     }
   }
   </script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
 <body>
-  <div id="root"><div id="loading">Loading dashboard...</div></div>
-  <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
+  <div id="root"><div id="loading">Loading dashboard…</div></div>
   <script type="text/babel" data-type="module">
-    import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
-    import { createRoot } from "react-dom/client";
-    import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from "recharts";
+import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from "recharts";
 
-    const C = {
-      bg: "#F5F7FA", card: "#FFFFFF", border: "#E2E6ED",
-      brand: "#2563EB", brandDark: "#1D4ED8", brandDeep: "#1E40AF",
-      text: "#1C1917", muted: "#57534E", green: "#15803D", amber: "#B45309",
-      warmGray: "#78716C", lightBrand: "#EFF6FF", lightGreen: "#F0FDF4", lightAmber: "#FFFBEB",
-      editHover: "#F0F4FF", editBorder: "#93C5FD", purple: "#7C3AED", lightPurple: "#F5F3FF",
-      saveGreen: "#059669",
+const C = {
+  bg: "#F5F7FA", card: "#FFFFFF", border: "#E2E6ED",
+  brand: "#2563EB", brandDark: "#1D4ED8", brandDeep: "#1E40AF",
+  text: "#1C1917", muted: "#57534E", green: "#15803D", amber: "#B45309",
+  warmGray: "#78716C", lightBrand: "#EFF6FF", lightGreen: "#F0FDF4", lightAmber: "#FFFBEB",
+  editHover: "#F0F4FF", editBorder: "#93C5FD", purple: "#7C3AED", lightPurple: "#F5F3FF",
+  saveGreen: "#059669",
+};
+
+const KEY = "jpadel-dashboard-v1";
+
+function saveFn(data) { try { localStorage.setItem(KEY, JSON.stringify(data)); return true; } catch { return false; } }
+function load() { try { const d = localStorage.getItem(KEY); return d ? JSON.parse(d) : null; } catch { return null; } }
+function clearFn() { try { localStorage.removeItem(KEY); return true; } catch { return false; } }
+
+function useWindowWidth() {
+  const [w, setW] = useState(typeof window !== "undefined" ? window.innerWidth : 1024);
+  useEffect(() => { const h = () => setW(window.innerWidth); window.addEventListener("resize", h); return () => window.removeEventListener("resize", h); }, []);
+  return w;
+}
+
+function EditableText({ value, onChange, style = {}, multiline = false }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const ref = useRef(null);
+  useEffect(() => { setDraft(value); }, [value]);
+  useEffect(() => { if (editing && ref.current) { ref.current.focus(); if (ref.current.select) ref.current.select(); } }, [editing]);
+  const commit = () => { setEditing(false); if (draft.trim()) onChange(draft.trim()); else setDraft(value); };
+  if (editing) {
+    const shared = { ...style, background: "#fff", border: `2px solid ${C.editBorder}`, borderRadius: 4, padding: "2px 6px", outline: "none", width: "100%", boxSizing: "border-box", fontFamily: "inherit", resize: multiline ? "vertical" : "none" };
+    if (multiline) return <textarea ref={ref} value={draft} onChange={e => setDraft(e.target.value)} onBlur={commit} onKeyDown={e => { if (e.key === "Escape") { setDraft(value); setEditing(false); } }} rows={3} style={{ ...shared, minHeight: 60 }} />;
+    return <input ref={ref} value={draft} onChange={e => setDraft(e.target.value)} onBlur={commit} onKeyDown={e => { if (e.key === "Enter") commit(); if (e.key === "Escape") { setDraft(value); setEditing(false); } }} style={shared} />;
+  }
+  return (
+    <span onClick={() => setEditing(true)} title="Click to edit"
+      style={{ ...style, cursor: "text", borderRadius: 3, padding: "1px 4px", margin: "-1px -4px", transition: "background 0.15s", borderBottom: "1px dashed transparent" }}
+      onMouseEnter={e => { e.currentTarget.style.background = C.editHover; e.currentTarget.style.borderBottomColor = C.editBorder; }}
+      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderBottomColor = "transparent"; }}>
+      {value || "Click to edit"}
+    </span>
+  );
+}
+
+const DEFAULTS = {
+  chargePerPlayer: 1, playersPerHour: 4, hoursPerDay: 6, hardwareCost: 400,
+  monthlyCost: 10, numCourts: 5, revSharePct: 25, fixedFee: 150,
+  hybridFixed: 75, hybridPct: 15, adRevenue: 100,
+  title: "AI Camera Partnership — Financial Model",
+  subtitle: "Jpadel · Interactive scenario planner",
+  metricLabels: ["Monthly Revenue / Court", "Hardware Payback", "Annual Revenue / Court", "Annual Profit"],
+  modelDescOverrides: [null, null, null],
+  pitchItems: [
+    { icon: "🎯", title: "Zero Risk for Jpadel", body: null },
+    { icon: "⚡", title: "-Day Payback", body: null },
+    { icon: "💰", title: "New Revenue Stream for Jpadel", body: null },
+    { icon: "🏆", title: "Competitive Advantage", body: "AI highlights differentiate Jpadel from every other padel venue in Egypt. Players get automatic video highlights — a feature only available in premium European clubs." },
+    { icon: "📈", title: "Drives Utilization", body: null },
+    { icon: "📺", title: "Advertising Upside", body: null },
+    { icon: "🔄", title: "Revenue Model Recommendation", body: null },
+  ],
+  chartTitles: { split: "Monthly Split — Per Court", cumulative: "Cumulative Profit — 12 Months (Per Court)", cumulativeSub: "After hardware recovery and operating costs", scaling: "Annual Profit by Number of Courts", scalingSub: "Your total annual profit across all courts" },
+  adDesc: "Kept 100% by Jpadel — screens, replays, digital signage",
+  adCardLabel: "Jpadel Ad Revenue", adCardSub: "100% to Jpadel", adSectionTitle: "Advertising Revenue",
+};
+
+function JpadelFinancialModel() {
+  const w = useWindowWidth();
+  const mobile = w < 768;
+  const saved = useRef(load() || {});
+  const g = (k) => saved.current[k] !== undefined ? saved.current[k] : DEFAULTS[k];
+
+  const [chargePerPlayer, setChargePerPlayer] = useState(g("chargePerPlayer"));
+  const [playersPerHour, setPlayersPerHour] = useState(g("playersPerHour"));
+  const [hoursPerDay, setHoursPerDay] = useState(g("hoursPerDay"));
+  const [hardwareCost, setHardwareCost] = useState(g("hardwareCost"));
+  const [monthlyCost, setMonthlyCost] = useState(g("monthlyCost"));
+  const [numCourts, setNumCourts] = useState(g("numCourts"));
+  const [revSharePct, setRevSharePct] = useState(g("revSharePct"));
+  const [fixedFee, setFixedFee] = useState(g("fixedFee"));
+  const [hybridFixed, setHybridFixed] = useState(g("hybridFixed"));
+  const [hybridPct, setHybridPct] = useState(g("hybridPct"));
+  const [adRevenue, setAdRevenue] = useState(g("adRevenue"));
+  const [activeTab, setActiveTab] = useState("overview");
+  const [showControls, setShowControls] = useState(!mobile);
+  const [saveStatus, setSaveStatus] = useState(null);
+
+  const [title, setTitle] = useState(g("title"));
+  const [subtitle, setSubtitle] = useState(g("subtitle"));
+  const [metricLabels, setMetricLabels] = useState(g("metricLabels"));
+  const setMetricLabel = (i, v) => setMetricLabels(prev => { const n = [...prev]; n[i] = v; return n; });
+  const [modelDescOverrides, setModelDescOverrides] = useState(g("modelDescOverrides"));
+  const setModelDesc = (i, v) => setModelDescOverrides(prev => { const n = [...prev]; n[i] = v; return n; });
+  const [pitchItems, setPitchItems] = useState(g("pitchItems"));
+  const setPitchField = (i, field, v) => setPitchItems(prev => { const n = [...prev]; n[i] = { ...n[i], [field]: v }; return n; });
+  const [chartTitles, setChartTitles] = useState(g("chartTitles"));
+  const setChartTitle = (k, v) => setChartTitles(prev => ({ ...prev, [k]: v }));
+  const [adDesc, setAdDesc] = useState(g("adDesc"));
+  const [adCardLabel, setAdCardLabel] = useState(g("adCardLabel"));
+  const [adCardSub, setAdCardSub] = useState(g("adCardSub"));
+  const [adSectionTitle, setAdSectionTitle] = useState(g("adSectionTitle"));
+  const [adSliderLabel, setAdSliderLabel] = useState(g("adSliderLabel") || "Ad Revenue / Court / Mo");
+
+  const textState = useMemo(() => ({
+    title, subtitle, metricLabels, modelDescOverrides, pitchItems, chartTitles,
+    adDesc, adCardLabel, adCardSub, adSectionTitle, adSliderLabel,
+  }), [title, subtitle, metricLabels, modelDescOverrides, pitchItems, chartTitles,
+    adDesc, adCardLabel, adCardSub, adSectionTitle, adSliderLabel]);
+
+  const allState = useMemo(() => ({
+    chargePerPlayer, playersPerHour, hoursPerDay, hardwareCost, monthlyCost, numCourts,
+    revSharePct, fixedFee, hybridFixed, hybridPct, adRevenue,
+    ...textState,
+  }), [chargePerPlayer, playersPerHour, hoursPerDay, hardwareCost, monthlyCost, numCourts,
+    revSharePct, fixedFee, hybridFixed, hybridPct, adRevenue, textState]);
+
+  // Auto-save only on text changes
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) { isFirstRender.current = false; return; }
+    const ok = saveFn(allState);
+    if (ok) { setSaveStatus("saved"); const t = setTimeout(() => setSaveStatus(null), 2000); return () => clearTimeout(t); }
+  }, [textState]);
+
+  const handleReset = () => {
+    if (!window.confirm("Reset all values and text to defaults? This cannot be undone.")) return;
+    setChargePerPlayer(DEFAULTS.chargePerPlayer); setPlayersPerHour(DEFAULTS.playersPerHour);
+    setHoursPerDay(DEFAULTS.hoursPerDay); setHardwareCost(DEFAULTS.hardwareCost);
+    setMonthlyCost(DEFAULTS.monthlyCost); setNumCourts(DEFAULTS.numCourts);
+    setRevSharePct(DEFAULTS.revSharePct); setFixedFee(DEFAULTS.fixedFee);
+    setHybridFixed(DEFAULTS.hybridFixed); setHybridPct(DEFAULTS.hybridPct);
+    setAdRevenue(DEFAULTS.adRevenue); setTitle(DEFAULTS.title); setSubtitle(DEFAULTS.subtitle);
+    setMetricLabels([...DEFAULTS.metricLabels]); setModelDescOverrides([...DEFAULTS.modelDescOverrides]);
+    setPitchItems(DEFAULTS.pitchItems.map(p => ({ ...p }))); setChartTitles({ ...DEFAULTS.chartTitles });
+    setAdDesc(DEFAULTS.adDesc); setAdCardLabel(DEFAULTS.adCardLabel);
+    setAdCardSub(DEFAULTS.adCardSub); setAdSectionTitle(DEFAULTS.adSectionTitle);
+    setAdSliderLabel("Ad Revenue / Court / Mo");
+    clearFn();
+  };
+
+  const handleExport = () => {
+    const blob = new Blob([JSON.stringify(allState, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url;
+    a.download = "jpadel-dashboard-settings.json"; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImport = () => {
+    const input = document.createElement("input"); input.type = "file"; input.accept = ".json";
+    input.onchange = (e) => {
+      const file = e.target.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const data = JSON.parse(ev.target.result);
+          if (data.chargePerPlayer !== undefined) setChargePerPlayer(data.chargePerPlayer);
+          if (data.playersPerHour !== undefined) setPlayersPerHour(data.playersPerHour);
+          if (data.hoursPerDay !== undefined) setHoursPerDay(data.hoursPerDay);
+          if (data.hardwareCost !== undefined) setHardwareCost(data.hardwareCost);
+          if (data.monthlyCost !== undefined) setMonthlyCost(data.monthlyCost);
+          if (data.numCourts !== undefined) setNumCourts(data.numCourts);
+          if (data.revSharePct !== undefined) setRevSharePct(data.revSharePct);
+          if (data.fixedFee !== undefined) setFixedFee(data.fixedFee);
+          if (data.hybridFixed !== undefined) setHybridFixed(data.hybridFixed);
+          if (data.hybridPct !== undefined) setHybridPct(data.hybridPct);
+          if (data.adRevenue !== undefined) setAdRevenue(data.adRevenue);
+          if (data.title) setTitle(data.title);
+          if (data.subtitle) setSubtitle(data.subtitle);
+          if (data.metricLabels) setMetricLabels(data.metricLabels);
+          if (data.modelDescOverrides) setModelDescOverrides(data.modelDescOverrides);
+          if (data.pitchItems) setPitchItems(data.pitchItems);
+          if (data.chartTitles) setChartTitles(data.chartTitles);
+          if (data.adDesc) setAdDesc(data.adDesc);
+          if (data.adCardLabel) setAdCardLabel(data.adCardLabel);
+          if (data.adCardSub) setAdCardSub(data.adCardSub);
+          if (data.adSectionTitle) setAdSectionTitle(data.adSectionTitle);
+          if (data.adSliderLabel) setAdSliderLabel(data.adSliderLabel);
+          setSaveStatus("imported"); setTimeout(() => setSaveStatus(null), 2500);
+        } catch { alert("Invalid settings file."); }
+      };
+      reader.readAsText(file);
     };
+    input.click();
+  };
 
-    const KEY = "jpadel-dashboard-v1";
-    function saveFn(data) { try { localStorage.setItem(KEY, JSON.stringify(data)); return true; } catch { return false; } }
-    function load() { try { const d = localStorage.getItem(KEY); return d ? JSON.parse(d) : null; } catch { return null; } }
-    function clearFn() { try { localStorage.removeItem(KEY); return true; } catch { return false; } }
-
-    function useWindowWidth() {
-      const [w, setW] = useState(typeof window !== "undefined" ? window.innerWidth : 1024);
-      useEffect(() => { const h = () => setW(window.innerWidth); window.addEventListener("resize", h); return () => window.removeEventListener("resize", h); }, []);
-      return w;
-    }
-
-    function EditableText({ value, onChange, style = {}, multiline = false }) {
-      const [editing, setEditing] = useState(false);
-      const [draft, setDraft] = useState(value);
-      const ref = useRef(null);
-      useEffect(() => { setDraft(value); }, [value]);
-      useEffect(() => { if (editing && ref.current) { ref.current.focus(); if (ref.current.select) ref.current.select(); } }, [editing]);
-      const commit = () => { setEditing(false); if (draft.trim()) onChange(draft.trim()); else setDraft(value); };
-      if (editing) {
-        const shared = { ...style, background: "#fff", border: `2px solid ${C.editBorder}`, borderRadius: 4, padding: "2px 6px", outline: "none", width: "100%", boxSizing: "border-box", fontFamily: "inherit", resize: multiline ? "vertical" : "none" };
-        if (multiline) return <textarea ref={ref} value={draft} onChange={e => setDraft(e.target.value)} onBlur={commit} onKeyDown={e => { if (e.key === "Escape") { setDraft(value); setEditing(false); } }} rows={3} style={{ ...shared, minHeight: 60 }} />;
-        return <input ref={ref} value={draft} onChange={e => setDraft(e.target.value)} onBlur={commit} onKeyDown={e => { if (e.key === "Enter") commit(); if (e.key === "Escape") { setDraft(value); setEditing(false); } }} style={shared} />;
-      }
-      return (
-        <span onClick={() => setEditing(true)} title="Click to edit"
-          style={{ ...style, cursor: "text", borderRadius: 3, padding: "1px 4px", margin: "-1px -4px", transition: "background 0.15s", borderBottom: "1px dashed transparent" }}
-          onMouseEnter={e => { e.currentTarget.style.background = C.editHover; e.currentTarget.style.borderBottomColor = C.editBorder; }}
-          onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderBottomColor = "transparent"; }}>
-          {value || "Click to edit"}
-        </span>
-      );
-    }
-
-    const DEFAULTS = {
-      chargePerPlayer: 1, playersPerHour: 4, hoursPerDay: 6, hardwareCost: 400,
-      monthlyCost: 10, numCourts: 5, revSharePct: 25, fixedFee: 150,
-      hybridFixed: 75, hybridPct: 15, adRevenue: 100,
-      title: "AI Camera Partnership \u2014 Financial Model",
-      subtitle: "Jpadel \u00b7 Interactive scenario planner",
-      metricLabels: ["Monthly Revenue / Court", "Hardware Payback", "Annual Revenue / Court", "Annual Profit"],
-      modelDescOverrides: [null, null, null],
-      pitchItems: [
-        { icon: "\ud83c\udfaf", title: "Zero Risk for Jpadel", body: null },
-        { icon: "\u26a1", title: "-Day Payback", body: null },
-        { icon: "\ud83d\udcb0", title: "New Revenue Stream for Jpadel", body: null },
-        { icon: "\ud83c\udfc6", title: "Competitive Advantage", body: "AI highlights differentiate Jpadel from every other padel venue in Egypt. Players get automatic video highlights \u2014 a feature only available in premium European clubs." },
-        { icon: "\ud83d\udcc8", title: "Drives Utilization", body: null },
-        { icon: "\ud83d\udcfa", title: "Advertising Upside", body: null },
-        { icon: "\ud83d\udd04", title: "Revenue Model Recommendation", body: null },
-      ],
-      chartTitles: { split: "Monthly Split \u2014 Per Court", cumulative: "Cumulative Profit \u2014 12 Months (Per Court)", cumulativeSub: "After hardware recovery and operating costs", scaling: "Annual Profit by Number of Courts", scalingSub: "Your total annual profit across all courts" },
-      adDesc: "Kept 100% by Jpadel \u2014 screens, replays, digital signage",
-      adCardLabel: "Jpadel Ad Revenue", adCardSub: "100% to Jpadel", adSectionTitle: "Advertising Revenue",
+  const calc = useMemo(() => {
+    const revenuePerHour = chargePerPlayer * playersPerHour;
+    const revenuePerDay = revenuePerHour * hoursPerDay;
+    const revenuePerMonth = revenuePerDay * 30;
+    const revenuePerYear = revenuePerMonth * 12;
+    const paybackDays = hardwareCost / revenuePerDay;
+    const revShare = {
+      yourProfit: revenuePerMonth * (revSharePct / 100) - monthlyCost,
+      jpadelFromSplit: revenuePerMonth * (1 - revSharePct / 100),
+      jpadelTotal: revenuePerMonth * (1 - revSharePct / 100) + adRevenue,
     };
+    const fixed = {
+      yourProfit: fixedFee - monthlyCost,
+      jpadelFromSplit: revenuePerMonth - fixedFee,
+      jpadelTotal: revenuePerMonth - fixedFee + adRevenue,
+    };
+    const hybridYourMonthly = hybridFixed + (revenuePerMonth - hybridFixed) * (hybridPct / 100);
+    const hybrid = {
+      yourProfit: hybridYourMonthly - monthlyCost,
+      jpadelFromSplit: revenuePerMonth - hybridYourMonthly,
+      jpadelTotal: revenuePerMonth - hybridYourMonthly + adRevenue,
+    };
+    return { revenuePerHour, revenuePerDay, revenuePerMonth, revenuePerYear, paybackDays, revShare, fixed, hybrid };
+  }, [chargePerPlayer, playersPerHour, hoursPerDay, hardwareCost, monthlyCost, revSharePct, fixedFee, hybridFixed, hybridPct, adRevenue]);
 
-    function JpadelFinancialModel() {
-      const w = useWindowWidth();
-      const mobile = w < 768;
-      const saved = useRef(load() || {});
-      const g = (k) => saved.current[k] !== undefined ? saved.current[k] : DEFAULTS[k];
+  const fmt = (n) => `$${Math.round(n).toLocaleString()}`;
+  const fmtK = (n) => n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : `$${n}`;
 
-      const [chargePerPlayer, setChargePerPlayer] = useState(g("chargePerPlayer"));
-      const [playersPerHour, setPlayersPerHour] = useState(g("playersPerHour"));
-      const [hoursPerDay, setHoursPerDay] = useState(g("hoursPerDay"));
-      const [hardwareCost, setHardwareCost] = useState(g("hardwareCost"));
-      const [monthlyCost, setMonthlyCost] = useState(g("monthlyCost"));
-      const [numCourts, setNumCourts] = useState(g("numCourts"));
-      const [revSharePct, setRevSharePct] = useState(g("revSharePct"));
-      const [fixedFee, setFixedFee] = useState(g("fixedFee"));
-      const [hybridFixed, setHybridFixed] = useState(g("hybridFixed"));
-      const [hybridPct, setHybridPct] = useState(g("hybridPct"));
-      const [adRevenue, setAdRevenue] = useState(g("adRevenue"));
-      const [activeTab, setActiveTab] = useState("overview");
-      const [showControls, setShowControls] = useState(!mobile);
-      const [saveStatus, setSaveStatus] = useState(null);
+  const getModelDesc = (i) => {
+    if (modelDescOverrides[i]) return modelDescOverrides[i];
+    if (i === 0) return `You take ${revSharePct}% of the $${calc.revenuePerMonth}/mo revenue. Jpadel keeps ${100 - revSharePct}% + $${adRevenue}/mo ad revenue. Scales with utilization.`;
+    if (i === 1) return `You get a fixed $${fixedFee}/mo. Jpadel keeps all upside above that + $${adRevenue}/mo ad revenue.`;
+    return `You get $${hybridFixed} base + ${hybridPct}% of remainder. Jpadel keeps the rest + $${adRevenue}/mo ad revenue.`;
+  };
 
-      const [title, setTitle] = useState(g("title"));
-      const [subtitle, setSubtitle] = useState(g("subtitle"));
-      const [metricLabels, setMetricLabels] = useState(g("metricLabels"));
-      const setMetricLabel = (i, v) => setMetricLabels(prev => { const n = [...prev]; n[i] = v; return n; });
-      const [modelDescOverrides, setModelDescOverrides] = useState(g("modelDescOverrides"));
-      const setModelDesc = (i, v) => setModelDescOverrides(prev => { const n = [...prev]; n[i] = v; return n; });
-      const [pitchItems, setPitchItems] = useState(g("pitchItems"));
-      const setPitchField = (i, field, v) => setPitchItems(prev => { const n = [...prev]; n[i] = { ...n[i], [field]: v }; return n; });
-      const [chartTitles, setChartTitles] = useState(g("chartTitles"));
-      const setChartTitle = (k, v) => setChartTitles(prev => ({ ...prev, [k]: v }));
-      const [adDesc, setAdDesc] = useState(g("adDesc"));
-      const [adCardLabel, setAdCardLabel] = useState(g("adCardLabel"));
-      const [adCardSub, setAdCardSub] = useState(g("adCardSub"));
-      const [adSectionTitle, setAdSectionTitle] = useState(g("adSectionTitle"));
+  const getPitchBody = (i) => {
+    if (pitchItems[i].body !== null) return pitchItems[i].body;
+    const defaults = [
+      `They pay nothing upfront. Hardware ($${hardwareCost}/court) is fully funded by you. Their only change is adding $${chargePerPlayer} per player to court pricing.`,
+      `At ${hoursPerDay}hrs/day utilization, hardware investment is recovered in under 3 weeks. Pure profit from day ${Math.ceil(calc.paybackDays) + 1}.`,
+      `Even at ${revSharePct}% rev share, Jpadel earns ${fmt(calc.revShare.jpadelTotal)}/month per court (incl. ${fmt(adRevenue)} ad revenue) — that's ${fmt(calc.revShare.jpadelTotal * 12)}/year of pure new income.`,
+      pitchItems[3].body,
+      `Players who get highlights are more likely to rebook. The $${chargePerPlayer} surcharge is negligible relative to court fees, but the perceived value is massive.`,
+      `Camera screens and highlight reels create premium ad inventory. At ${fmt(adRevenue)}/mo per court, Jpadel keeps 100% of ad revenue — an extra ${fmt(adRevenue * numCourts * 12)}/year across ${numCourts} courts.`,
+      `Start with ${revSharePct}% revenue share — aligns incentives, Jpadel earns more when courts are busier. Revisit after 3-6 months with real data.`,
+    ];
+    return defaults[i];
+  };
+  const getPitchTitle = (i) => { if (i === 1 && pitchItems[1].title === "-Day Payback") return `${calc.paybackDays.toFixed(0)}-Day Payback`; return pitchItems[i].title; };
 
-      const textState = useMemo(() => ({
-        title, subtitle, metricLabels, modelDescOverrides, pitchItems, chartTitles,
-        adDesc, adCardLabel, adCardSub, adSectionTitle,
-      }), [title, subtitle, metricLabels, modelDescOverrides, pitchItems, chartTitles,
-        adDesc, adCardLabel, adCardSub, adSectionTitle]);
+  const comparisonData = [
+    { name: "Rev Share", you: Math.round(calc.revShare.yourProfit), jpadelSplit: Math.round(calc.revShare.jpadelFromSplit), jpadelAds: adRevenue },
+    { name: "Fixed Fee", you: Math.round(calc.fixed.yourProfit), jpadelSplit: Math.round(calc.fixed.jpadelFromSplit), jpadelAds: adRevenue },
+    { name: "Hybrid", you: Math.round(calc.hybrid.yourProfit), jpadelSplit: Math.round(calc.hybrid.jpadelFromSplit), jpadelAds: adRevenue },
+  ];
 
-      const allState = useMemo(() => ({
-        chargePerPlayer, playersPerHour, hoursPerDay, hardwareCost, monthlyCost, numCourts,
-        revSharePct, fixedFee, hybridFixed, hybridPct, adRevenue,
-        ...textState,
-      }), [chargePerPlayer, playersPerHour, hoursPerDay, hardwareCost, monthlyCost, numCourts,
-        revSharePct, fixedFee, hybridFixed, hybridPct, adRevenue, textState]);
+  const scalingData = [1, 3, 5, 10, 20, 50].map(n => ({
+    courts: n, revShare: Math.round(calc.revShare.yourProfit * n * 12),
+    fixedFee: Math.round(calc.fixed.yourProfit * n * 12), hybrid: Math.round(calc.hybrid.yourProfit * n * 12),
+  }));
 
-      const isFirstRender = useRef(true);
-      useEffect(() => {
-        if (isFirstRender.current) { isFirstRender.current = false; return; }
-        const ok = saveFn(allState);
-        if (ok) { setSaveStatus("saved"); const t = setTimeout(() => setSaveStatus(null), 2000); return () => clearTimeout(t); }
-      }, [textState]);
+  const cumulativeData = Array.from({ length: 12 }, (_, i) => {
+    const m = i + 1;
+    if (m === 1) {
+      const p2d = 30 - calc.paybackDays; const p2r = (p2d / 30) * calc.revenuePerMonth;
+      return { month: `M${m}`, revShare: Math.round(p2r * (revSharePct / 100) - monthlyCost), fixedFee: Math.round((p2d / 30) * fixedFee - monthlyCost), hybrid: Math.round((hybridFixed * p2d / 30) + (p2r - hybridFixed * p2d / 30) * (hybridPct / 100) - monthlyCost) };
+    }
+    return { month: `M${m}`, revShare: 0, fixedFee: 0, hybrid: 0 };
+  });
+  for (let i = 1; i < 12; i++) {
+    cumulativeData[i].revShare = cumulativeData[i - 1].revShare + Math.round(calc.revShare.yourProfit);
+    cumulativeData[i].fixedFee = cumulativeData[i - 1].fixedFee + Math.round(calc.fixed.yourProfit);
+    cumulativeData[i].hybrid = cumulativeData[i - 1].hybrid + Math.round(calc.hybrid.yourProfit);
+  }
 
-      const handleReset = () => {
-        if (!window.confirm("Reset all values and text to defaults? This cannot be undone.")) return;
-        setChargePerPlayer(DEFAULTS.chargePerPlayer); setPlayersPerHour(DEFAULTS.playersPerHour);
-        setHoursPerDay(DEFAULTS.hoursPerDay); setHardwareCost(DEFAULTS.hardwareCost);
-        setMonthlyCost(DEFAULTS.monthlyCost); setNumCourts(DEFAULTS.numCourts);
-        setRevSharePct(DEFAULTS.revSharePct); setFixedFee(DEFAULTS.fixedFee);
-        setHybridFixed(DEFAULTS.hybridFixed); setHybridPct(DEFAULTS.hybridPct);
-        setAdRevenue(DEFAULTS.adRevenue); setTitle(DEFAULTS.title); setSubtitle(DEFAULTS.subtitle);
-        setMetricLabels([...DEFAULTS.metricLabels]); setModelDescOverrides([...DEFAULTS.modelDescOverrides]);
-        setPitchItems(DEFAULTS.pitchItems.map(p => ({ ...p }))); setChartTitles({ ...DEFAULTS.chartTitles });
-        setAdDesc(DEFAULTS.adDesc); setAdCardLabel(DEFAULTS.adCardLabel);
-        setAdCardSub(DEFAULTS.adCardSub); setAdSectionTitle(DEFAULTS.adSectionTitle);
-        clearFn();
-      };
+  const InputSlider = ({ label, value, onChange, min, max, step = 1, prefix = "", suffix = "" }) => (
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+        <label style={{ color: C.muted, fontSize: 13, fontWeight: 500 }}>{label}</label>
+        <span style={{ color: C.brandDeep, fontWeight: 700, fontSize: 14 }}>{prefix}{value}{suffix}</span>
+      </div>
+      <input type="range" min={min} max={max} step={step} value={value}
+        onChange={e => onChange(Number(e.target.value))} aria-label={label}
+        style={{ width: "100%", accentColor: C.brand, height: 6, cursor: "pointer" }} />
+    </div>
+  );
 
-      const handleExport = () => {
-        const blob = new Blob([JSON.stringify(allState, null, 2)], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a"); a.href = url;
-        a.download = "jpadel-dashboard-settings.json"; a.click();
-        URL.revokeObjectURL(url);
-      };
+  const MetricCard = ({ label, labelIdx, value, sub }) => (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: mobile ? "12px 14px" : "16px 18px", flex: mobile ? "1 1 calc(50% - 6px)" : "1 1 0", minWidth: mobile ? "calc(50% - 6px)" : 130, borderTop: `3px solid ${C.brand}` }}>
+      <div style={{ marginBottom: 4 }}>
+        <EditableText value={label} onChange={v => setMetricLabel(labelIdx, v)} style={{ color: C.muted, fontSize: mobile ? 10 : 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.6 }} />
+      </div>
+      <div style={{ color: C.text, fontSize: mobile ? 18 : 22, fontWeight: 800 }}>{value}</div>
+      {sub && <div style={{ color: C.brandDeep, fontSize: mobile ? 11 : 12, fontWeight: 600, marginTop: 3 }}>{sub}</div>}
+    </div>
+  );
 
-      const handleImport = () => {
-        const input = document.createElement("input"); input.type = "file"; input.accept = ".json";
-        input.onchange = (e) => {
-          const file = e.target.files[0]; if (!file) return;
-          const reader = new FileReader();
-          reader.onload = (ev) => {
-            try {
-              const data = JSON.parse(ev.target.result);
-              if (data.chargePerPlayer !== undefined) setChargePerPlayer(data.chargePerPlayer);
-              if (data.playersPerHour !== undefined) setPlayersPerHour(data.playersPerHour);
-              if (data.hoursPerDay !== undefined) setHoursPerDay(data.hoursPerDay);
-              if (data.hardwareCost !== undefined) setHardwareCost(data.hardwareCost);
-              if (data.monthlyCost !== undefined) setMonthlyCost(data.monthlyCost);
-              if (data.numCourts !== undefined) setNumCourts(data.numCourts);
-              if (data.revSharePct !== undefined) setRevSharePct(data.revSharePct);
-              if (data.fixedFee !== undefined) setFixedFee(data.fixedFee);
-              if (data.hybridFixed !== undefined) setHybridFixed(data.hybridFixed);
-              if (data.hybridPct !== undefined) setHybridPct(data.hybridPct);
-              if (data.adRevenue !== undefined) setAdRevenue(data.adRevenue);
-              if (data.title) setTitle(data.title);
-              if (data.subtitle) setSubtitle(data.subtitle);
-              if (data.metricLabels) setMetricLabels(data.metricLabels);
-              if (data.modelDescOverrides) setModelDescOverrides(data.modelDescOverrides);
-              if (data.pitchItems) setPitchItems(data.pitchItems);
-              if (data.chartTitles) setChartTitles(data.chartTitles);
-              if (data.adDesc) setAdDesc(data.adDesc);
-              if (data.adCardLabel) setAdCardLabel(data.adCardLabel);
-              if (data.adCardSub) setAdCardSub(data.adCardSub);
-              if (data.adSectionTitle) setAdSectionTitle(data.adSectionTitle);
-              setSaveStatus("imported"); setTimeout(() => setSaveStatus(null), 2500);
-            } catch { alert("Invalid settings file."); }
-          };
-          reader.readAsText(file);
-        };
-        input.click();
-      };
+  const Tab = ({ id, label }) => {
+    const active = activeTab === id;
+    return <button onClick={() => setActiveTab(id)} aria-selected={active} role="tab" style={{ background: active ? C.brandDark : "transparent", color: active ? "#FFFFFF" : C.muted, border: active ? "none" : `1px solid ${C.border}`, padding: mobile ? "6px 12px" : "8px 20px", borderRadius: 6, cursor: "pointer", fontSize: mobile ? 12 : 13, fontWeight: 600, transition: "all 0.15s", flex: mobile ? "1 1 auto" : "0 0 auto", textAlign: "center" }}>{label}</button>;
+  };
 
-      const calc = useMemo(() => {
-        const revenuePerHour = chargePerPlayer * playersPerHour;
-        const revenuePerDay = revenuePerHour * hoursPerDay;
-        const revenuePerMonth = revenuePerDay * 30;
-        const revenuePerYear = revenuePerMonth * 12;
-        const paybackDays = hardwareCost / revenuePerDay;
-        const revShare = { yourProfit: revenuePerMonth * (revSharePct / 100) - monthlyCost, jpadelFromSplit: revenuePerMonth * (1 - revSharePct / 100), jpadelTotal: revenuePerMonth * (1 - revSharePct / 100) + adRevenue };
-        const fixed = { yourProfit: fixedFee - monthlyCost, jpadelFromSplit: revenuePerMonth - fixedFee, jpadelTotal: revenuePerMonth - fixedFee + adRevenue };
-        const hybridYourMonthly = hybridFixed + (revenuePerMonth - hybridFixed) * (hybridPct / 100);
-        const hybrid = { yourProfit: hybridYourMonthly - monthlyCost, jpadelFromSplit: revenuePerMonth - hybridYourMonthly, jpadelTotal: revenuePerMonth - hybridYourMonthly + adRevenue };
-        return { revenuePerHour, revenuePerDay, revenuePerMonth, revenuePerYear, paybackDays, revShare, fixed, hybrid };
-      }, [chargePerPlayer, playersPerHour, hoursPerDay, hardwareCost, monthlyCost, revSharePct, fixedFee, hybridFixed, hybridPct, adRevenue]);
+  const ModelCard = ({ title, color, tagBg, yourProfit, jpadelTotal, jpadelAds, descIdx }) => (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: mobile ? 16 : 22, flex: "1 1 0", minWidth: mobile ? "100%" : 220, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+      <div style={{ display: "inline-block", padding: "4px 12px", borderRadius: 5, background: tagBg, color, fontWeight: 700, fontSize: 12, marginBottom: 12 }}>{title}</div>
+      <div style={{ color: C.muted, fontSize: 11, fontWeight: 600, marginBottom: 2, textTransform: "uppercase" }}>Your Monthly Profit</div>
+      <div style={{ color: C.text, fontSize: mobile ? 22 : 28, fontWeight: 800, marginBottom: 12 }}>{fmt(yourProfit)}</div>
+      <div style={{ color: C.muted, fontSize: 11, fontWeight: 600, marginBottom: 2, textTransform: "uppercase" }}>Jpadel Total / Month</div>
+      <div style={{ color: C.text, fontSize: mobile ? 16 : 18, fontWeight: 700 }}>{fmt(jpadelTotal)}</div>
+      <div style={{ color: C.purple, fontSize: 12, fontWeight: 600, marginBottom: 12 }}>incl. {fmt(jpadelAds)} ad revenue</div>
+      <EditableText value={getModelDesc(descIdx)} onChange={v => setModelDesc(descIdx, v)} multiline style={{ fontSize: 13, color: C.muted, lineHeight: 1.7, display: "block" }} />
+    </div>
+  );
 
-      const fmt = (n) => `$${Math.round(n).toLocaleString()}`;
-      const fmtK = (n) => n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : `$${n}`;
+  const tooltipStyle = { background: "#fff", border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", fontSize: 12 };
+  const chartHeight = mobile ? 240 : 300;
 
-      const getModelDesc = (i) => {
-        if (modelDescOverrides[i]) return modelDescOverrides[i];
-        if (i === 0) return `You take ${revSharePct}% of the $${calc.revenuePerMonth}/mo revenue. Jpadel keeps ${100 - revSharePct}% + $${adRevenue}/mo ad revenue. Scales with utilization.`;
-        if (i === 1) return `You get a fixed $${fixedFee}/mo. Jpadel keeps all upside above that + $${adRevenue}/mo ad revenue.`;
-        return `You get $${hybridFixed} base + ${hybridPct}% of remainder. Jpadel keeps the rest + $${adRevenue}/mo ad revenue.`;
-      };
+  const SmBtn = ({ onClick, children, color = C.muted, bg = "transparent", border = C.border }) => (
+    <button onClick={onClick} style={{ padding: mobile ? "5px 10px" : "6px 14px", fontSize: 12, fontWeight: 600, color, background: bg, border: `1px solid ${border}`, borderRadius: 5, cursor: "pointer", transition: "all 0.15s" }}>{children}</button>
+  );
 
-      const getPitchBody = (i) => {
-        if (pitchItems[i].body !== null) return pitchItems[i].body;
-        const defaults = [
-          `They pay nothing upfront. Hardware ($${hardwareCost}/court) is fully funded by you. Their only change is adding $${chargePerPlayer} per player to court pricing.`,
-          `At ${hoursPerDay}hrs/day utilization, hardware investment is recovered in under 3 weeks. Pure profit from day ${Math.ceil(calc.paybackDays) + 1}.`,
-          `Even at ${revSharePct}% rev share, Jpadel earns ${fmt(calc.revShare.jpadelTotal)}/month per court (incl. ${fmt(adRevenue)} ad revenue) \u2014 that's ${fmt(calc.revShare.jpadelTotal * 12)}/year of pure new income.`,
-          pitchItems[3].body,
-          `Players who get highlights are more likely to rebook. The $${chargePerPlayer} surcharge is negligible relative to court fees, but the perceived value is massive.`,
-          `Camera screens and highlight reels create premium ad inventory. At ${fmt(adRevenue)}/mo per court, Jpadel keeps 100% of ad revenue \u2014 an extra ${fmt(adRevenue * numCourts * 12)}/year across ${numCourts} courts.`,
-          `Start with ${revSharePct}% revenue share \u2014 aligns incentives, Jpadel earns more when courts are busier. Revisit after 3-6 months with real data.`,
-        ];
-        return defaults[i];
-      };
-      const getPitchTitle = (i) => { if (i === 1 && pitchItems[1].title === "-Day Payback") return `${calc.paybackDays.toFixed(0)}-Day Payback`; return pitchItems[i].title; };
+  return (
+    <div style={{ background: C.bg, color: C.text, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif", minHeight: "100vh", padding: mobile ? "16px 12px" : "28px 24px" }}>
+      <div style={{ maxWidth: 1000, margin: "0 auto" }}>
 
-      const comparisonData = [
-        { name: "Rev Share", you: Math.round(calc.revShare.yourProfit), jpadelSplit: Math.round(calc.revShare.jpadelFromSplit), jpadelAds: adRevenue },
-        { name: "Fixed Fee", you: Math.round(calc.fixed.yourProfit), jpadelSplit: Math.round(calc.fixed.jpadelFromSplit), jpadelAds: adRevenue },
-        { name: "Hybrid", you: Math.round(calc.hybrid.yourProfit), jpadelSplit: Math.round(calc.hybrid.jpadelFromSplit), jpadelAds: adRevenue },
-      ];
-      const scalingData = [1, 3, 5, 10, 20, 50].map(n => ({ courts: n, revShare: Math.round(calc.revShare.yourProfit * n * 12), fixedFee: Math.round(calc.fixed.yourProfit * n * 12), hybrid: Math.round(calc.hybrid.yourProfit * n * 12) }));
-
-      const cumulativeData = Array.from({ length: 12 }, (_, i) => {
-        const m = i + 1;
-        if (m === 1) { const p2d = 30 - calc.paybackDays; const p2r = (p2d / 30) * calc.revenuePerMonth; return { month: `M${m}`, revShare: Math.round(p2r * (revSharePct / 100) - monthlyCost), fixedFee: Math.round((p2d / 30) * fixedFee - monthlyCost), hybrid: Math.round((hybridFixed * p2d / 30) + (p2r - hybridFixed * p2d / 30) * (hybridPct / 100) - monthlyCost) }; }
-        return { month: `M${m}`, revShare: 0, fixedFee: 0, hybrid: 0 };
-      });
-      for (let i = 1; i < 12; i++) { cumulativeData[i].revShare = cumulativeData[i - 1].revShare + Math.round(calc.revShare.yourProfit); cumulativeData[i].fixedFee = cumulativeData[i - 1].fixedFee + Math.round(calc.fixed.yourProfit); cumulativeData[i].hybrid = cumulativeData[i - 1].hybrid + Math.round(calc.hybrid.yourProfit); }
-
-      const InputSlider = ({ label, value, onChange, min, max, step = 1, prefix = "", suffix = "" }) => (
-        <div style={{ marginBottom: 18 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-            <label style={{ color: C.muted, fontSize: 13, fontWeight: 500 }}>{label}</label>
-            <span style={{ color: C.brandDeep, fontWeight: 700, fontSize: 14 }}>{prefix}{value}{suffix}</span>
+        {/* Header + Save Bar */}
+        <header style={{ marginBottom: mobile ? 16 : 28 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+            <div style={{ width: mobile ? 36 : 42, height: mobile ? 36 : 42, borderRadius: 8, background: C.brand, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 900, fontSize: mobile ? 16 : 20, flexShrink: 0 }}>AI</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <EditableText value={title} onChange={setTitle} style={{ fontSize: mobile ? 16 : 22, fontWeight: 800, color: C.text, letterSpacing: -0.3, display: "block", wordBreak: "break-word" }} />
+              <EditableText value={subtitle} onChange={setSubtitle} style={{ color: C.muted, fontSize: mobile ? 12 : 13, fontWeight: 500, display: "block", marginTop: 2 }} />
+            </div>
           </div>
-          <input type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(Number(e.target.value))} aria-label={label} style={{ width: "100%", accentColor: C.brand, height: 6, cursor: "pointer" }} />
+          {/* Save toolbar */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "8px 12px", background: C.card, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+            <SmBtn onClick={handleExport} color={C.brand} border={C.brand}>⬇ Export JSON</SmBtn>
+            <SmBtn onClick={handleImport} color={C.brand} border={C.brand}>⬆ Import JSON</SmBtn>
+            <SmBtn onClick={handleReset} color="#DC2626" border="#DC2626">↺ Reset</SmBtn>
+            <div style={{ flex: 1 }} />
+            {saveStatus === "saved" && <span style={{ fontSize: 12, color: C.saveGreen, fontWeight: 600 }}>✓ Auto-saved</span>}
+            {saveStatus === "imported" && <span style={{ fontSize: 12, color: C.brand, fontWeight: 600 }}>✓ Settings imported</span>}
+            {!saveStatus && <span style={{ fontSize: 11, color: C.warmGray }}>Text edits auto-save to browser</span>}
+          </div>
+        </header>
+
+        {/* Metrics */}
+        <div style={{ display: "flex", gap: mobile ? 8 : 10, marginBottom: mobile ? 16 : 24, flexWrap: "wrap" }}>
+          <MetricCard labelIdx={0} label={metricLabels[0]} value={fmt(calc.revenuePerMonth)} />
+          <MetricCard labelIdx={1} label={metricLabels[1]} value={`${Math.floor(calc.paybackDays)}d (${Math.round(hardwareCost / calc.revenuePerHour)}hrs)`} sub="Then pure profit" />
+          <MetricCard labelIdx={2} label={metricLabels[2]} value={fmt(calc.revenuePerYear)} />
+          <MetricCard labelIdx={3} label={`${metricLabels[3]} × ${numCourts} courts`} value={fmt(calc.revShare.yourProfit * numCourts * 12)} sub="Revenue share model" />
+          <div style={{ background: C.lightPurple, border: `1px solid ${C.border}`, borderRadius: 10, padding: mobile ? "12px 14px" : "16px 18px", flex: mobile ? "1 1 calc(50% - 6px)" : "1 1 0", minWidth: mobile ? "calc(50% - 6px)" : 130, borderTop: `3px solid ${C.purple}` }}>
+            <div style={{ marginBottom: 4 }}>
+              <EditableText value={adCardLabel} onChange={setAdCardLabel} style={{ color: C.muted, fontSize: mobile ? 10 : 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.6 }} />
+            </div>
+            <div style={{ color: C.text, fontSize: mobile ? 18 : 22, fontWeight: 800 }}>{fmt(adRevenue)}/mo</div>
+            <EditableText value={adCardSub} onChange={setAdCardSub} style={{ color: C.purple, fontSize: mobile ? 11 : 12, fontWeight: 600, marginTop: 3, display: "block" }} />
+          </div>
         </div>
-      );
 
-      const MetricCard = ({ label, labelIdx, value, sub }) => (
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: mobile ? "12px 14px" : "16px 18px", flex: mobile ? "1 1 calc(50% - 6px)" : "1 1 0", minWidth: mobile ? "calc(50% - 6px)" : 130, borderTop: `3px solid ${C.brand}` }}>
-          <div style={{ marginBottom: 4 }}><EditableText value={label} onChange={v => setMetricLabel(labelIdx, v)} style={{ color: C.muted, fontSize: mobile ? 10 : 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.6 }} /></div>
-          <div style={{ color: C.text, fontSize: mobile ? 18 : 22, fontWeight: 800 }}>{value}</div>
-          {sub && <div style={{ color: C.brandDeep, fontSize: mobile ? 11 : 12, fontWeight: 600, marginTop: 3 }}>{sub}</div>}
-        </div>
-      );
+        {/* Mobile toggle */}
+        {mobile && (
+          <button onClick={() => setShowControls(!showControls)} style={{ width: "100%", padding: "10px 16px", marginBottom: 12, borderRadius: 8, background: C.card, border: `1px solid ${C.border}`, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, fontWeight: 700, color: C.text }}>
+            <span>{showControls ? "Hide" : "Show"} Assumptions & Settings</span>
+            <span style={{ fontSize: 18, transform: showControls ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>▼</span>
+          </button>
+        )}
 
-      const Tab = ({ id, label }) => { const active = activeTab === id; return <button onClick={() => setActiveTab(id)} aria-selected={active} role="tab" style={{ background: active ? C.brandDark : "transparent", color: active ? "#FFFFFF" : C.muted, border: active ? "none" : `1px solid ${C.border}`, padding: mobile ? "6px 12px" : "8px 20px", borderRadius: 6, cursor: "pointer", fontSize: mobile ? 12 : 13, fontWeight: 600, transition: "all 0.15s", flex: mobile ? "1 1 auto" : "0 0 auto", textAlign: "center" }}>{label}</button>; };
+        <div style={{ display: "flex", gap: mobile ? 0 : 22, flexDirection: mobile ? "column" : "row" }}>
+          {/* Controls */}
+          {(showControls || !mobile) && (
+            <aside style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: mobile ? 18 : 24, width: mobile ? "100%" : 264, flexShrink: 0, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", marginBottom: mobile ? 12 : 0 }}>
+              <div style={{ color: C.text, fontWeight: 800, fontSize: 13, marginBottom: 18, textTransform: "uppercase", letterSpacing: 0.8, paddingBottom: 10, borderBottom: `2px solid ${C.brand}` }}>Assumptions</div>
+              <InputSlider label="Charge / Player / Hr" value={chargePerPlayer} onChange={setChargePerPlayer} min={0.5} max={3} step={0.25} prefix="$" />
+              <InputSlider label="Players / Hour" value={playersPerHour} onChange={setPlayersPerHour} min={2} max={4} />
+              <InputSlider label="Avg Hours / Day" value={hoursPerDay} onChange={setHoursPerDay} min={2} max={14} />
+              <InputSlider label="Hardware Cost" value={hardwareCost} onChange={setHardwareCost} min={200} max={800} step={50} prefix="$" />
+              <InputSlider label="Monthly OpEx" value={monthlyCost} onChange={setMonthlyCost} min={10} max={300} step={10} prefix="$" />
+              <InputSlider label="Courts to Model" value={numCourts} onChange={setNumCourts} min={1} max={50} />
+              <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 18, marginTop: 4 }}>
+                <div style={{ color: C.text, fontWeight: 800, fontSize: 12, marginBottom: 14, textTransform: "uppercase", letterSpacing: 0.8 }}>Phase 2 Settings</div>
+                <InputSlider label="Rev Share %" value={revSharePct} onChange={setRevSharePct} min={10} max={100} suffix="%" />
+                <InputSlider label="Fixed Fee / Month" value={fixedFee} onChange={setFixedFee} min={50} max={500} step={10} prefix="$" />
+                <InputSlider label="Hybrid: Fixed Part" value={hybridFixed} onChange={setHybridFixed} min={25} max={200} step={25} prefix="$" />
+                <InputSlider label="Hybrid: Share %" value={hybridPct} onChange={setHybridPct} min={5} max={30} suffix="%" />
+              </div>
+              <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 18, marginTop: 4 }}>
+                <div style={{ marginBottom: 14 }}>
+                  <EditableText value={adSectionTitle} onChange={setAdSectionTitle} style={{ color: C.purple, fontWeight: 800, fontSize: 12, textTransform: "uppercase", letterSpacing: 0.8 }} />
+                </div>
+                <div style={{ marginBottom: 18 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                    <EditableText value={adSliderLabel} onChange={setAdSliderLabel} style={{ color: C.muted, fontSize: 13, fontWeight: 500 }} />
+                    <span style={{ color: C.brandDeep, fontWeight: 700, fontSize: 14 }}>${adRevenue}</span>
+                  </div>
+                  <input type="range" min={50} max={1000} step={50} value={adRevenue}
+                    onChange={e => setAdRevenue(Number(e.target.value))} aria-label={adSliderLabel}
+                    style={{ width: "100%", accentColor: C.brand, height: 6, cursor: "pointer" }} />
+                </div>
+                <EditableText value={adDesc} onChange={setAdDesc} style={{ color: C.muted, fontSize: 11, lineHeight: 1.5, marginTop: -8, display: "block" }} />
+              </div>
+            </aside>
+          )}
 
-      const ModelCard = ({ title, color, tagBg, yourProfit, jpadelTotal, jpadelAds, descIdx }) => (
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: mobile ? 16 : 22, flex: "1 1 0", minWidth: mobile ? "100%" : 220, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-          <div style={{ display: "inline-block", padding: "4px 12px", borderRadius: 5, background: tagBg, color, fontWeight: 700, fontSize: 12, marginBottom: 12 }}>{title}</div>
-          <div style={{ color: C.muted, fontSize: 11, fontWeight: 600, marginBottom: 2, textTransform: "uppercase" }}>Your Monthly Profit</div>
-          <div style={{ color: C.text, fontSize: mobile ? 22 : 28, fontWeight: 800, marginBottom: 12 }}>{fmt(yourProfit)}</div>
-          <div style={{ color: C.muted, fontSize: 11, fontWeight: 600, marginBottom: 2, textTransform: "uppercase" }}>Jpadel Total / Month</div>
-          <div style={{ color: C.text, fontSize: mobile ? 16 : 18, fontWeight: 700 }}>{fmt(jpadelTotal)}</div>
-          <div style={{ color: C.purple, fontSize: 12, fontWeight: 600, marginBottom: 12 }}>incl. {fmt(jpadelAds)} ad revenue</div>
-          <EditableText value={getModelDesc(descIdx)} onChange={v => setModelDesc(descIdx, v)} multiline style={{ fontSize: 13, color: C.muted, lineHeight: 1.7, display: "block" }} />
-        </div>
-      );
+          {/* Main */}
+          <main style={{ flex: 1, minWidth: 0 }}>
+            <nav role="tablist" style={{ display: "flex", gap: mobile ? 4 : 6, marginBottom: mobile ? 12 : 20, flexWrap: mobile ? "wrap" : "nowrap" }}>
+              <Tab id="overview" label="Comparison" />
+              <Tab id="projection" label="12-Month" />
+              <Tab id="scaling" label="Scaling" />
+              <Tab id="pitch" label="Pitch" />
+            </nav>
 
-      const tooltipStyle = { background: "#fff", border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", fontSize: 12 };
-      const chartHeight = mobile ? 240 : 300;
-      const SmBtn = ({ onClick, children, color = C.muted, bg = "transparent", border = C.border }) => (<button onClick={onClick} style={{ padding: mobile ? "5px 10px" : "6px 14px", fontSize: 12, fontWeight: 600, color, background: bg, border: `1px solid ${border}`, borderRadius: 5, cursor: "pointer", transition: "all 0.15s" }}>{children}</button>);
-
-      return (
-        <div style={{ background: C.bg, color: C.text, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif", minHeight: "100vh", padding: mobile ? "16px 12px" : "28px 24px" }}>
-          <div style={{ maxWidth: 1000, margin: "0 auto" }}>
-            <header style={{ marginBottom: mobile ? 16 : 28 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
-                <div style={{ width: mobile ? 36 : 42, height: mobile ? 36 : 42, borderRadius: 8, background: C.brand, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 900, fontSize: mobile ? 16 : 20, flexShrink: 0 }}>AI</div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <EditableText value={title} onChange={setTitle} style={{ fontSize: mobile ? 16 : 22, fontWeight: 800, color: C.text, letterSpacing: -0.3, display: "block", wordBreak: "break-word" }} />
-                  <EditableText value={subtitle} onChange={setSubtitle} style={{ color: C.muted, fontSize: mobile ? 12 : 13, fontWeight: 500, display: "block", marginTop: 2 }} />
+            {activeTab === "overview" && (
+              <div role="tabpanel">
+                <div style={{ display: "flex", gap: mobile ? 10 : 14, flexDirection: mobile ? "column" : "row", marginBottom: mobile ? 16 : 24 }}>
+                  <ModelCard title={`Rev Share (${revSharePct}%)`} color={C.brandDeep} tagBg={C.lightBrand} yourProfit={calc.revShare.yourProfit} jpadelTotal={calc.revShare.jpadelTotal} jpadelAds={adRevenue} descIdx={0} />
+                  <ModelCard title={`Fixed ($${fixedFee}/mo)`} color={C.green} tagBg={C.lightGreen} yourProfit={calc.fixed.yourProfit} jpadelTotal={calc.fixed.jpadelTotal} jpadelAds={adRevenue} descIdx={1} />
+                  <ModelCard title={`Hybrid ($${hybridFixed}+${hybridPct}%)`} color={C.amber} tagBg={C.lightAmber} yourProfit={calc.hybrid.yourProfit} jpadelTotal={calc.hybrid.jpadelTotal} jpadelAds={adRevenue} descIdx={2} />
+                </div>
+                <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: mobile ? 14 : 24, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                  <EditableText value={chartTitles.split} onChange={v => setChartTitle("split", v)} style={{ color: C.text, fontWeight: 700, fontSize: mobile ? 14 : 15, display: "block", marginBottom: 14 }} />
+                  <ResponsiveContainer width="100%" height={chartHeight}>
+                    <BarChart data={comparisonData} barGap={4}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#E2E6ED" />
+                      <XAxis dataKey="name" tick={{ fill: C.muted, fontSize: mobile ? 10 : 12 }} />
+                      <YAxis tick={{ fill: C.muted, fontSize: 11 }} tickFormatter={v => `$${v}`} width={mobile ? 45 : 60} />
+                      <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`$${v}`, '']} />
+                      <Legend wrapperStyle={{ fontSize: mobile ? 11 : 12 }} />
+                      <Bar dataKey="you" name="Your Profit" fill={C.brand} stackId="a" radius={[0, 0, 0, 0]} />
+                      <Bar dataKey="jpadelSplit" name="Jpadel (Split)" fill={C.green} stackId="b" />
+                      <Bar dataKey="jpadelAds" name="Jpadel (Ads)" fill={C.purple} stackId="b" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "8px 12px", background: C.card, border: `1px solid ${C.border}`, borderRadius: 8 }}>
-                <SmBtn onClick={handleExport} color={C.brand} border={C.brand}>{"\u2b07"} Export JSON</SmBtn>
-                <SmBtn onClick={handleImport} color={C.brand} border={C.brand}>{"\u2b06"} Import JSON</SmBtn>
-                <SmBtn onClick={handleReset} color="#DC2626" border="#DC2626">{"\u21ba"} Reset</SmBtn>
-                <div style={{ flex: 1 }} />
-                {saveStatus === "saved" && <span style={{ fontSize: 12, color: C.saveGreen, fontWeight: 600 }}>{"\u2713"} Auto-saved</span>}
-                {saveStatus === "imported" && <span style={{ fontSize: 12, color: C.brand, fontWeight: 600 }}>{"\u2713"} Settings imported</span>}
-                {!saveStatus && <span style={{ fontSize: 11, color: C.warmGray }}>Text edits auto-save to browser</span>}
-              </div>
-            </header>
-
-            <div style={{ display: "flex", gap: mobile ? 8 : 10, marginBottom: mobile ? 16 : 24, flexWrap: "wrap" }}>
-              <MetricCard labelIdx={0} label={metricLabels[0]} value={fmt(calc.revenuePerMonth)} />
-              <MetricCard labelIdx={1} label={metricLabels[1]} value={`${Math.floor(calc.paybackDays)}d (${Math.round(hardwareCost / calc.revenuePerHour)}hrs)`} sub="Then pure profit" />
-              <MetricCard labelIdx={2} label={metricLabels[2]} value={fmt(calc.revenuePerYear)} />
-              <MetricCard labelIdx={3} label={`${metricLabels[3]} \u00d7 ${numCourts} courts`} value={fmt(calc.revShare.yourProfit * numCourts * 12)} sub="Revenue share model" />
-              <div style={{ background: C.lightPurple, border: `1px solid ${C.border}`, borderRadius: 10, padding: mobile ? "12px 14px" : "16px 18px", flex: mobile ? "1 1 calc(50% - 6px)" : "1 1 0", minWidth: mobile ? "calc(50% - 6px)" : 130, borderTop: `3px solid ${C.purple}` }}>
-                <div style={{ marginBottom: 4 }}><EditableText value={adCardLabel} onChange={setAdCardLabel} style={{ color: C.muted, fontSize: mobile ? 10 : 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.6 }} /></div>
-                <div style={{ color: C.text, fontSize: mobile ? 18 : 22, fontWeight: 800 }}>{fmt(adRevenue)}/mo</div>
-                <EditableText value={adCardSub} onChange={setAdCardSub} style={{ color: C.purple, fontSize: mobile ? 11 : 12, fontWeight: 600, marginTop: 3, display: "block" }} />
-              </div>
-            </div>
-
-            {mobile && (
-              <button onClick={() => setShowControls(!showControls)} style={{ width: "100%", padding: "10px 16px", marginBottom: 12, borderRadius: 8, background: C.card, border: `1px solid ${C.border}`, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, fontWeight: 700, color: C.text }}>
-                <span>{showControls ? "Hide" : "Show"} Assumptions & Settings</span>
-                <span style={{ fontSize: 18, transform: showControls ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>{"\u25bc"}</span>
-              </button>
             )}
 
-            <div style={{ display: "flex", gap: mobile ? 0 : 22, flexDirection: mobile ? "column" : "row" }}>
-              {(showControls || !mobile) && (
-                <aside style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: mobile ? 18 : 24, width: mobile ? "100%" : 264, flexShrink: 0, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", marginBottom: mobile ? 12 : 0 }}>
-                  <div style={{ color: C.text, fontWeight: 800, fontSize: 13, marginBottom: 18, textTransform: "uppercase", letterSpacing: 0.8, paddingBottom: 10, borderBottom: `2px solid ${C.brand}` }}>Assumptions</div>
-                  <InputSlider label="Charge / Player / Hr" value={chargePerPlayer} onChange={setChargePerPlayer} min={0.5} max={3} step={0.25} prefix="$" />
-                  <InputSlider label="Players / Hour" value={playersPerHour} onChange={setPlayersPerHour} min={2} max={4} />
-                  <InputSlider label="Avg Hours / Day" value={hoursPerDay} onChange={setHoursPerDay} min={2} max={14} />
-                  <InputSlider label="Hardware Cost" value={hardwareCost} onChange={setHardwareCost} min={200} max={800} step={50} prefix="$" />
-                  <InputSlider label="Monthly OpEx" value={monthlyCost} onChange={setMonthlyCost} min={10} max={300} step={10} prefix="$" />
-                  <InputSlider label="Courts to Model" value={numCourts} onChange={setNumCourts} min={1} max={50} />
-                  <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 18, marginTop: 4 }}>
-                    <div style={{ color: C.text, fontWeight: 800, fontSize: 12, marginBottom: 14, textTransform: "uppercase", letterSpacing: 0.8 }}>Phase 2 Settings</div>
-                    <InputSlider label="Rev Share %" value={revSharePct} onChange={setRevSharePct} min={10} max={100} suffix="%" />
-                    <InputSlider label="Fixed Fee / Month" value={fixedFee} onChange={setFixedFee} min={50} max={500} step={10} prefix="$" />
-                    <InputSlider label="Hybrid: Fixed Part" value={hybridFixed} onChange={setHybridFixed} min={25} max={200} step={25} prefix="$" />
-                    <InputSlider label="Hybrid: Share %" value={hybridPct} onChange={setHybridPct} min={5} max={30} suffix="%" />
-                  </div>
-                  <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 18, marginTop: 4 }}>
-                    <div style={{ marginBottom: 14 }}><EditableText value={adSectionTitle} onChange={setAdSectionTitle} style={{ color: C.purple, fontWeight: 800, fontSize: 12, textTransform: "uppercase", letterSpacing: 0.8 }} /></div>
-                    <InputSlider label="Ad Revenue / Court / Mo" value={adRevenue} onChange={setAdRevenue} min={50} max={1000} step={50} prefix="$" />
-                    <EditableText value={adDesc} onChange={setAdDesc} style={{ color: C.muted, fontSize: 11, lineHeight: 1.5, marginTop: -8, display: "block" }} />
-                  </div>
-                </aside>
-              )}
-
-              <main style={{ flex: 1, minWidth: 0 }}>
-                <nav role="tablist" style={{ display: "flex", gap: mobile ? 4 : 6, marginBottom: mobile ? 12 : 20, flexWrap: mobile ? "wrap" : "nowrap" }}>
-                  <Tab id="overview" label="Comparison" />
-                  <Tab id="projection" label="12-Month" />
-                  <Tab id="scaling" label="Scaling" />
-                  <Tab id="pitch" label="Pitch" />
-                </nav>
-
-                {activeTab === "overview" && (
-                  <div role="tabpanel">
-                    <div style={{ display: "flex", gap: mobile ? 10 : 14, flexDirection: mobile ? "column" : "row", marginBottom: mobile ? 16 : 24 }}>
-                      <ModelCard title={`Rev Share (${revSharePct}%)`} color={C.brandDeep} tagBg={C.lightBrand} yourProfit={calc.revShare.yourProfit} jpadelTotal={calc.revShare.jpadelTotal} jpadelAds={adRevenue} descIdx={0} />
-                      <ModelCard title={`Fixed ($${fixedFee}/mo)`} color={C.green} tagBg={C.lightGreen} yourProfit={calc.fixed.yourProfit} jpadelTotal={calc.fixed.jpadelTotal} jpadelAds={adRevenue} descIdx={1} />
-                      <ModelCard title={`Hybrid ($${hybridFixed}+${hybridPct}%)`} color={C.amber} tagBg={C.lightAmber} yourProfit={calc.hybrid.yourProfit} jpadelTotal={calc.hybrid.jpadelTotal} jpadelAds={adRevenue} descIdx={2} />
+            {activeTab === "projection" && (
+              <div role="tabpanel" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: mobile ? 14 : 24, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                <EditableText value={chartTitles.cumulative} onChange={v => setChartTitle("cumulative", v)} style={{ color: C.text, fontWeight: 700, fontSize: mobile ? 14 : 15, display: "block", marginBottom: 2 }} />
+                <EditableText value={chartTitles.cumulativeSub} onChange={v => setChartTitle("cumulativeSub", v)} style={{ color: C.muted, fontSize: 13, display: "block", marginBottom: 16 }} />
+                <ResponsiveContainer width="100%" height={chartHeight}>
+                  <LineChart data={cumulativeData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E2E6ED" />
+                    <XAxis dataKey="month" tick={{ fill: C.muted, fontSize: mobile ? 9 : 11 }} />
+                    <YAxis tick={{ fill: C.muted, fontSize: 11 }} tickFormatter={v => `$${v}`} width={mobile ? 45 : 60} />
+                    <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`$${v}`, '']} />
+                    <Legend wrapperStyle={{ fontSize: mobile ? 11 : 12 }} />
+                    <Line type="monotone" dataKey="revShare" name={`Rev Share ${revSharePct}%`} stroke={C.brand} strokeWidth={2.5} dot={false} />
+                    <Line type="monotone" dataKey="fixedFee" name={`Fixed $${fixedFee}`} stroke={C.green} strokeWidth={2.5} dot={false} />
+                    <Line type="monotone" dataKey="hybrid" name="Hybrid" stroke={C.amber} strokeWidth={2.5} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+                <div style={{ display: "flex", gap: mobile ? 12 : 28, marginTop: 16, flexWrap: "wrap", justifyContent: "center" }}>
+                  {[{ label: "Rev Share", value: cumulativeData[11]?.revShare, color: C.brandDark }, { label: "Fixed Fee", value: cumulativeData[11]?.fixedFee, color: C.green }, { label: "Hybrid", value: cumulativeData[11]?.hybrid, color: C.amber }].map(({ label, value, color }) => (
+                    <div key={label} style={{ textAlign: "center" }}>
+                      <div style={{ color: C.muted, fontSize: 11, fontWeight: 600, marginBottom: 2 }}>{label} (12mo)</div>
+                      <div style={{ color, fontWeight: 800, fontSize: mobile ? 18 : 22 }}>{fmt(value)}</div>
                     </div>
-                    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: mobile ? 14 : 24, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-                      <EditableText value={chartTitles.split} onChange={v => setChartTitle("split", v)} style={{ color: C.text, fontWeight: 700, fontSize: mobile ? 14 : 15, display: "block", marginBottom: 14 }} />
-                      <ResponsiveContainer width="100%" height={chartHeight}>
-                        <BarChart data={comparisonData} barGap={4}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#E2E6ED" />
-                          <XAxis dataKey="name" tick={{ fill: C.muted, fontSize: mobile ? 10 : 12 }} />
-                          <YAxis tick={{ fill: C.muted, fontSize: 11 }} tickFormatter={v => `$${v}`} width={mobile ? 45 : 60} />
-                          <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`$${v}`, '']} />
-                          <Legend wrapperStyle={{ fontSize: mobile ? 11 : 12 }} />
-                          <Bar dataKey="you" name="Your Profit" fill={C.brand} stackId="a" radius={[0, 0, 0, 0]} />
-                          <Bar dataKey="jpadelSplit" name="Jpadel (Split)" fill={C.green} stackId="b" />
-                          <Bar dataKey="jpadelAds" name="Jpadel (Ads)" fill={C.purple} stackId="b" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                )}
+                  ))}
+                </div>
+              </div>
+            )}
 
-                {activeTab === "projection" && (
-                  <div role="tabpanel" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: mobile ? 14 : 24, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-                    <EditableText value={chartTitles.cumulative} onChange={v => setChartTitle("cumulative", v)} style={{ color: C.text, fontWeight: 700, fontSize: mobile ? 14 : 15, display: "block", marginBottom: 2 }} />
-                    <EditableText value={chartTitles.cumulativeSub} onChange={v => setChartTitle("cumulativeSub", v)} style={{ color: C.muted, fontSize: 13, display: "block", marginBottom: 16 }} />
-                    <ResponsiveContainer width="100%" height={chartHeight}>
-                      <LineChart data={cumulativeData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#E2E6ED" />
-                        <XAxis dataKey="month" tick={{ fill: C.muted, fontSize: mobile ? 9 : 11 }} />
-                        <YAxis tick={{ fill: C.muted, fontSize: 11 }} tickFormatter={v => `$${v}`} width={mobile ? 45 : 60} />
-                        <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`$${v}`, '']} />
-                        <Legend wrapperStyle={{ fontSize: mobile ? 11 : 12 }} />
-                        <Line type="monotone" dataKey="revShare" name={`Rev Share ${revSharePct}%`} stroke={C.brand} strokeWidth={2.5} dot={false} />
-                        <Line type="monotone" dataKey="fixedFee" name={`Fixed $${fixedFee}`} stroke={C.green} strokeWidth={2.5} dot={false} />
-                        <Line type="monotone" dataKey="hybrid" name="Hybrid" stroke={C.amber} strokeWidth={2.5} dot={false} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                    <div style={{ display: "flex", gap: mobile ? 12 : 28, marginTop: 16, flexWrap: "wrap", justifyContent: "center" }}>
-                      {[{ label: "Rev Share", value: cumulativeData[11]?.revShare, color: C.brandDark }, { label: "Fixed Fee", value: cumulativeData[11]?.fixedFee, color: C.green }, { label: "Hybrid", value: cumulativeData[11]?.hybrid, color: C.amber }].map(({ label, value, color }) => (
-                        <div key={label} style={{ textAlign: "center" }}>
-                          <div style={{ color: C.muted, fontSize: 11, fontWeight: 600, marginBottom: 2 }}>{label} (12mo)</div>
-                          <div style={{ color, fontWeight: 800, fontSize: mobile ? 18 : 22 }}>{fmt(value)}</div>
-                        </div>
-                      ))}
+            {activeTab === "scaling" && (
+              <div role="tabpanel" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: mobile ? 14 : 24, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                <EditableText value={chartTitles.scaling} onChange={v => setChartTitle("scaling", v)} style={{ color: C.text, fontWeight: 700, fontSize: mobile ? 14 : 15, display: "block", marginBottom: 2 }} />
+                <EditableText value={chartTitles.scalingSub} onChange={v => setChartTitle("scalingSub", v)} style={{ color: C.muted, fontSize: 13, display: "block", marginBottom: 16 }} />
+                <ResponsiveContainer width="100%" height={chartHeight}>
+                  <BarChart data={scalingData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E2E6ED" />
+                    <XAxis dataKey="courts" tick={{ fill: C.muted, fontSize: 11 }} />
+                    <YAxis tick={{ fill: C.muted, fontSize: 10 }} tickFormatter={v => v >= 1000 ? `$${(v/1000).toFixed(0)}k` : `$${v}`} width={mobile ? 45 : 60} />
+                    <Tooltip contentStyle={tooltipStyle} formatter={(v) => [fmtK(v), '']} />
+                    <Legend wrapperStyle={{ fontSize: mobile ? 11 : 12 }} />
+                    <Bar dataKey="revShare" name="Rev Share" fill={C.brand} radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="fixedFee" name="Fixed Fee" fill={C.green} radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="hybrid" name="Hybrid" fill={C.amber} radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+                <div style={{ marginTop: 16, padding: mobile ? 12 : 16, background: C.lightBrand, borderRadius: 8, border: `1px solid #BFDBFE` }}>
+                  <div style={{ color: C.brandDeep, fontWeight: 700, fontSize: 13, marginBottom: 4 }}>At {numCourts} courts</div>
+                  <div style={{ color: C.text, fontSize: 13, lineHeight: 1.7 }}>Investment: {fmt(numCourts * hardwareCost)} · Profit: {fmt(calc.revShare.yourProfit * numCourts * 12)} (rev share) / {fmt(calc.fixed.yourProfit * numCourts * 12)} (fixed) / {fmt(calc.hybrid.yourProfit * numCourts * 12)} (hybrid)</div>
+                </div>
+                <div style={{ marginTop: 8, padding: mobile ? 12 : 16, background: C.lightPurple, borderRadius: 8, border: `1px solid #C4B5FD` }}>
+                  <EditableText value={adCardLabel} onChange={setAdCardLabel} style={{ color: C.purple, fontWeight: 700, fontSize: 13, display: "block", marginBottom: 4 }} />
+                  <div style={{ color: C.text, fontSize: 13 }}>{fmt(adRevenue * numCourts)}/month · {fmt(adRevenue * numCourts * 12)}/year — 100% kept by Jpadel</div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "pitch" && (
+              <div role="tabpanel" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {pitchItems.map((item, i) => (
+                  <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: mobile ? 14 : 20, display: "flex", gap: mobile ? 10 : 16, alignItems: "flex-start", boxShadow: "0 1px 3px rgba(0,0,0,0.06)", borderLeft: `3px solid ${i === 5 ? C.purple : C.brand}` }}>
+                    <span style={{ fontSize: mobile ? 22 : 28, lineHeight: 1 }} role="img">{item.icon}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <EditableText value={getPitchTitle(i)} onChange={v => setPitchField(i, "title", v)} style={{ color: C.text, fontWeight: 700, fontSize: mobile ? 14 : 15, display: "block", marginBottom: 4 }} />
+                      <EditableText value={getPitchBody(i)} onChange={v => setPitchField(i, "body", v)} multiline style={{ color: C.muted, fontSize: 13, lineHeight: 1.7, display: "block" }} />
                     </div>
                   </div>
-                )}
-
-                {activeTab === "scaling" && (
-                  <div role="tabpanel" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: mobile ? 14 : 24, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-                    <EditableText value={chartTitles.scaling} onChange={v => setChartTitle("scaling", v)} style={{ color: C.text, fontWeight: 700, fontSize: mobile ? 14 : 15, display: "block", marginBottom: 2 }} />
-                    <EditableText value={chartTitles.scalingSub} onChange={v => setChartTitle("scalingSub", v)} style={{ color: C.muted, fontSize: 13, display: "block", marginBottom: 16 }} />
-                    <ResponsiveContainer width="100%" height={chartHeight}>
-                      <BarChart data={scalingData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#E2E6ED" />
-                        <XAxis dataKey="courts" tick={{ fill: C.muted, fontSize: 11 }} />
-                        <YAxis tick={{ fill: C.muted, fontSize: 10 }} tickFormatter={v => v >= 1000 ? `$${(v/1000).toFixed(0)}k` : `$${v}`} width={mobile ? 45 : 60} />
-                        <Tooltip contentStyle={tooltipStyle} formatter={(v) => [fmtK(v), '']} />
-                        <Legend wrapperStyle={{ fontSize: mobile ? 11 : 12 }} />
-                        <Bar dataKey="revShare" name="Rev Share" fill={C.brand} radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="fixedFee" name="Fixed Fee" fill={C.green} radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="hybrid" name="Hybrid" fill={C.amber} radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                    <div style={{ marginTop: 16, padding: mobile ? 12 : 16, background: C.lightBrand, borderRadius: 8, border: `1px solid #BFDBFE` }}>
-                      <div style={{ color: C.brandDeep, fontWeight: 700, fontSize: 13, marginBottom: 4 }}>At {numCourts} courts</div>
-                      <div style={{ color: C.text, fontSize: 13, lineHeight: 1.7 }}>Investment: {fmt(numCourts * hardwareCost)} {"\u00b7"} Profit: {fmt(calc.revShare.yourProfit * numCourts * 12)} (rev share) / {fmt(calc.fixed.yourProfit * numCourts * 12)} (fixed) / {fmt(calc.hybrid.yourProfit * numCourts * 12)} (hybrid)</div>
-                    </div>
-                    <div style={{ marginTop: 8, padding: mobile ? 12 : 16, background: C.lightPurple, borderRadius: 8, border: `1px solid #C4B5FD` }}>
-                      <EditableText value={adCardLabel} onChange={setAdCardLabel} style={{ color: C.purple, fontWeight: 700, fontSize: 13, display: "block", marginBottom: 4 }} />
-                      <div style={{ color: C.text, fontSize: 13 }}>{fmt(adRevenue * numCourts)}/month {"\u00b7"} {fmt(adRevenue * numCourts * 12)}/year {"\u2014"} 100% kept by Jpadel</div>
-                    </div>
-                  </div>
-                )}
-
-                {activeTab === "pitch" && (
-                  <div role="tabpanel" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    {pitchItems.map((item, i) => (
-                      <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: mobile ? 14 : 20, display: "flex", gap: mobile ? 10 : 16, alignItems: "flex-start", boxShadow: "0 1px 3px rgba(0,0,0,0.06)", borderLeft: `3px solid ${i === 5 ? C.purple : C.brand}` }}>
-                        <span style={{ fontSize: mobile ? 22 : 28, lineHeight: 1 }} role="img">{item.icon}</span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <EditableText value={getPitchTitle(i)} onChange={v => setPitchField(i, "title", v)} style={{ color: C.text, fontWeight: 700, fontSize: mobile ? 14 : 15, display: "block", marginBottom: 4 }} />
-                          <EditableText value={getPitchBody(i)} onChange={v => setPitchField(i, "body", v)} multiline style={{ color: C.muted, fontSize: 13, lineHeight: 1.7, display: "block" }} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </main>
-            </div>
-
-            <footer style={{ marginTop: mobile ? 16 : 28, paddingTop: 12, borderTop: `1px solid ${C.border}`, color: C.warmGray, fontSize: 11, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 4 }}>
-              <span>WCAG 2.1 AA compliant</span>
-              <span>AI Camera Business {"\u00b7"} v1.0</span>
-            </footer>
-          </div>
+                ))}
+              </div>
+            )}
+          </main>
         </div>
-      );
-    }
 
-    const root = createRoot(document.getElementById("root"));
-    root.render(<JpadelFinancialModel />);
+        <footer style={{ marginTop: mobile ? 16 : 28, paddingTop: 12, borderTop: `1px solid ${C.border}`, color: C.warmGray, fontSize: 11, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 4 }}>
+          <span>WCAG 2.1 AA compliant</span>
+          <span>AI Camera Business · v1.0</span>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<JpadelFinancialModel />);
   </script>
 </body>
 </html>
