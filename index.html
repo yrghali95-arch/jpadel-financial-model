@@ -7,9 +7,9 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; }
-    input[type="range"] { -webkit-appearance: none; appearance: none; height: 4px; border-radius: 2px; background: #E2E6ED; outline: none; }
-    input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #2563EB; cursor: pointer; }
-    input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: #2563EB; cursor: pointer; border: none; }
+    input[type="range"] { -webkit-appearance: none; appearance: none; height: 6px; border-radius: 3px; background: #E2E6ED; outline: none; }
+    input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%; background: #2563EB; cursor: pointer; }
+    input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: #2563EB; cursor: pointer; border: none; }
     textarea, input[type="text"] { font-family: inherit; }
     button { font-family: inherit; }
     #loading { display: flex; align-items: center; justify-content: center; height: 100vh; font-size: 16px; color: #57534E; }
@@ -30,7 +30,7 @@
 
   <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
   <script type="text/babel" data-type="module">
-    import React, { useState, useMemo, useRef, useEffect } from "react";
+    import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
     import { createRoot } from "react-dom/client";
     import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from "recharts";
 
@@ -42,94 +42,60 @@
       editHover: "#F0F4FF", editBorder: "#93C5FD",
     };
 
-    function EditableText({ value, onChange, style = {}, multiline = false, placeholder = "Click to edit" }) {
+    function useWindowWidth() {
+      const [w, setW] = useState(typeof window !== "undefined" ? window.innerWidth : 1024);
+      useEffect(() => {
+        const h = () => setW(window.innerWidth);
+        window.addEventListener("resize", h);
+        return () => window.removeEventListener("resize", h);
+      }, []);
+      return w;
+    }
+
+    function EditableText({ value, onChange, style = {}, multiline = false }) {
       const [editing, setEditing] = useState(false);
       const [draft, setDraft] = useState(value);
       const ref = useRef(null);
 
       useEffect(() => { setDraft(value); }, [value]);
       useEffect(() => {
-        if (editing && ref.current) {
-          ref.current.focus();
-          if (ref.current.select) ref.current.select();
-        }
+        if (editing && ref.current) { ref.current.focus(); if (ref.current.select) ref.current.select(); }
       }, [editing]);
 
-      const commit = () => {
-        setEditing(false);
-        if (draft.trim()) onChange(draft.trim());
-        else setDraft(value);
-      };
+      const commit = () => { setEditing(false); if (draft.trim()) onChange(draft.trim()); else setDraft(value); };
 
       if (editing) {
         const shared = {
-          ...style,
-          background: "#fff",
-          border: `2px solid ${C.editBorder}`,
-          borderRadius: 4,
-          padding: "2px 6px",
-          outline: "none",
-          width: "100%",
-          boxSizing: "border-box",
-          fontFamily: "inherit",
-          resize: multiline ? "vertical" : "none",
+          ...style, background: "#fff", border: `2px solid ${C.editBorder}`, borderRadius: 4,
+          padding: "2px 6px", outline: "none", width: "100%", boxSizing: "border-box",
+          fontFamily: "inherit", resize: multiline ? "vertical" : "none",
         };
         if (multiline) {
-          return (
-            <textarea
-              ref={ref}
-              value={draft}
-              onChange={e => setDraft(e.target.value)}
-              onBlur={commit}
-              onKeyDown={e => { if (e.key === "Escape") { setDraft(value); setEditing(false); } }}
-              rows={3}
-              style={{ ...shared, minHeight: 60 }}
-            />
-          );
+          return <textarea ref={ref} value={draft} onChange={e => setDraft(e.target.value)}
+            onBlur={commit} onKeyDown={e => { if (e.key === "Escape") { setDraft(value); setEditing(false); } }}
+            rows={3} style={{ ...shared, minHeight: 60 }} />;
         }
-        return (
-          <input
-            ref={ref}
-            value={draft}
-            onChange={e => setDraft(e.target.value)}
-            onBlur={commit}
-            onKeyDown={e => {
-              if (e.key === "Enter") commit();
-              if (e.key === "Escape") { setDraft(value); setEditing(false); }
-            }}
-            style={shared}
-          />
-        );
+        return <input ref={ref} value={draft} onChange={e => setDraft(e.target.value)}
+          onBlur={commit} onKeyDown={e => { if (e.key === "Enter") commit(); if (e.key === "Escape") { setDraft(value); setEditing(false); } }}
+          style={shared} />;
       }
 
       return (
-        <span
-          onClick={() => setEditing(true)}
-          title="Click to edit"
-          style={{
-            ...style,
-            cursor: "text",
-            borderRadius: 3,
-            padding: "1px 4px",
-            margin: "-1px -4px",
-            transition: "background 0.15s",
-            borderBottom: "1px dashed transparent",
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.background = C.editHover;
-            e.currentTarget.style.borderBottomColor = C.editBorder;
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.background = "transparent";
-            e.currentTarget.style.borderBottomColor = "transparent";
-          }}
-        >
-          {value || placeholder}
+        <span onClick={() => setEditing(true)} title="Click to edit"
+          style={{ ...style, cursor: "text", borderRadius: 3, padding: "1px 4px", margin: "-1px -4px",
+            transition: "background 0.15s", borderBottom: "1px dashed transparent" }}
+          onMouseEnter={e => { e.currentTarget.style.background = C.editHover; e.currentTarget.style.borderBottomColor = C.editBorder; }}
+          onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderBottomColor = "transparent"; }}>
+          {value || "Click to edit"}
         </span>
       );
     }
 
     function JpadelFinancialModel() {
+      const w = useWindowWidth();
+      const mobile = w < 768;
+      const tablet = w >= 768 && w < 1024;
+
       const [chargePerPlayer, setChargePerPlayer] = useState(1);
       const [playersPerHour, setPlayersPerHour] = useState(4);
       const [hoursPerDay, setHoursPerDay] = useState(6);
@@ -141,20 +107,13 @@
       const [hybridFixed, setHybridFixed] = useState(75);
       const [hybridPct, setHybridPct] = useState(15);
       const [activeTab, setActiveTab] = useState("overview");
+      const [showControls, setShowControls] = useState(!mobile);
 
       const [title, setTitle] = useState("AI Camera Partnership \u2014 Financial Model");
       const [subtitle, setSubtitle] = useState("Jpadel \u00b7 Interactive scenario planner");
-
-      const [metricLabels, setMetricLabels] = useState([
-        "Monthly Revenue / Court", "Hardware Payback", "Annual Revenue / Court", "Annual Profit"
-      ]);
+      const [metricLabels, setMetricLabels] = useState(["Monthly Revenue / Court", "Hardware Payback", "Annual Revenue / Court", "Annual Profit"]);
       const setMetricLabel = (i, v) => setMetricLabels(prev => { const n = [...prev]; n[i] = v; return n; });
 
-      const [modelDescs, setModelDescs] = useState([
-        (rp, rev) => `You take ${rp}% of the $${rev}/mo revenue. Scales with utilization. Jpadel is incentivized to book more hours.`,
-        (ff) => `Predictable SaaS income. Jpadel keeps all upside above $${ff}. You earn the same regardless of utilization.`,
-        (hf, hp) => `Guaranteed base of $${hf} + ${hp}% of remainder. Balances predictability with upside.`,
-      ]);
       const [modelDescOverrides, setModelDescOverrides] = useState([null, null, null]);
       const setModelDesc = (i, v) => setModelDescOverrides(prev => { const n = [...prev]; n[i] = v; return n; });
 
@@ -166,9 +125,7 @@
         { icon: "\ud83d\udcc8", title: "Drives Utilization", body: null },
         { icon: "\ud83d\udd04", title: "Revenue Model Recommendation", body: null },
       ]);
-      const setPitchField = (i, field, v) => setPitchItems(prev => {
-        const n = [...prev]; n[i] = { ...n[i], [field]: v }; return n;
-      });
+      const setPitchField = (i, field, v) => setPitchItems(prev => { const n = [...prev]; n[i] = { ...n[i], [field]: v }; return n; });
 
       const [chartTitles, setChartTitles] = useState({
         split: "Monthly Split \u2014 Per Court",
@@ -203,11 +160,14 @@
         return { revenuePerHour, revenuePerDay, revenuePerMonth, revenuePerYear, paybackDays, revShare, fixed, hybrid };
       }, [chargePerPlayer, playersPerHour, hoursPerDay, hardwareCost, monthlyCost, revSharePct, fixedFee, hybridFixed, hybridPct]);
 
+      const fmt = (n) => `$${Math.round(n).toLocaleString()}`;
+      const fmtK = (n) => n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : `$${n}`;
+
       const getModelDesc = (i) => {
         if (modelDescOverrides[i]) return modelDescOverrides[i];
-        if (i === 0) return modelDescs[0](revSharePct, calc.revenuePerMonth);
-        if (i === 1) return modelDescs[1](fixedFee);
-        return modelDescs[2](hybridFixed, hybridPct);
+        if (i === 0) return `You take ${revSharePct}% of the $${calc.revenuePerMonth}/mo revenue. Scales with utilization. Jpadel is incentivized to book more hours.`;
+        if (i === 1) return `Predictable SaaS income. Jpadel keeps all upside above $${fixedFee}. You earn the same regardless of utilization.`;
+        return `Guaranteed base of $${hybridFixed} + ${hybridPct}% of remainder. Balances predictability with upside.`;
       };
 
       const getPitchBody = (i) => {
@@ -229,7 +189,7 @@
       };
 
       const comparisonData = [
-        { name: "Revenue Share", you: Math.round(calc.revShare.yourProfit), jpadel: Math.round(calc.revShare.jpadelMonthly) },
+        { name: "Rev Share", you: Math.round(calc.revShare.yourProfit), jpadel: Math.round(calc.revShare.jpadelMonthly) },
         { name: "Fixed Fee", you: Math.round(calc.fixed.yourProfit), jpadel: Math.round(calc.fixed.jpadelMonthly) },
         { name: "Hybrid", you: Math.round(calc.hybrid.yourProfit), jpadel: Math.round(calc.hybrid.jpadelMonthly) },
       ];
@@ -261,32 +221,32 @@
         cumulativeData[i].hybrid = cumulativeData[i - 1].hybrid + Math.round(calc.hybrid.yourProfit);
       }
 
-      const fmt = (n) => `$${Math.round(n).toLocaleString()}`;
-      const fmtK = (n) => n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : `$${n}`;
-
       const InputSlider = ({ label, value, onChange, min, max, step = 1, prefix = "", suffix = "" }) => (
-        <div style={{ marginBottom: 20 }}>
+        <div style={{ marginBottom: 18 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
             <label style={{ color: C.muted, fontSize: 13, fontWeight: 500 }}>{label}</label>
             <span style={{ color: C.brandDeep, fontWeight: 700, fontSize: 14 }}>{prefix}{value}{suffix}</span>
           </div>
           <input type="range" min={min} max={max} step={step} value={value}
             onChange={e => onChange(Number(e.target.value))} aria-label={label}
-            style={{ width: "100%", accentColor: C.brand, height: 4, cursor: "pointer" }} />
+            style={{ width: "100%", accentColor: C.brand, height: 6, cursor: "pointer" }} />
         </div>
       );
 
       const MetricCard = ({ label, labelIdx, value, sub }) => (
         <div style={{
           background: C.card, border: `1px solid ${C.border}`, borderRadius: 10,
-          padding: "16px 18px", flex: 1, minWidth: 150, borderTop: `3px solid ${C.brand}`,
+          padding: mobile ? "12px 14px" : "16px 18px",
+          flex: mobile ? "1 1 calc(50% - 6px)" : "1 1 0",
+          minWidth: mobile ? "calc(50% - 6px)" : 150,
+          borderTop: `3px solid ${C.brand}`,
         }}>
-          <div style={{ marginBottom: 6 }}>
+          <div style={{ marginBottom: 4 }}>
             <EditableText value={label} onChange={v => setMetricLabel(labelIdx, v)}
-              style={{ color: C.muted, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8 }} />
+              style={{ color: C.muted, fontSize: mobile ? 10 : 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.6 }} />
           </div>
-          <div style={{ color: C.text, fontSize: 24, fontWeight: 800 }}>{value}</div>
-          {sub && <div style={{ color: C.brandDeep, fontSize: 12, fontWeight: 600, marginTop: 4 }}>{sub}</div>}
+          <div style={{ color: C.text, fontSize: mobile ? 18 : 24, fontWeight: 800 }}>{value}</div>
+          {sub && <div style={{ color: C.brandDeep, fontSize: mobile ? 11 : 12, fontWeight: 600, marginTop: 3 }}>{sub}</div>}
         </div>
       );
 
@@ -298,8 +258,9 @@
               background: active ? C.brandDark : "transparent",
               color: active ? "#FFFFFF" : C.muted,
               border: active ? "none" : `1px solid ${C.border}`,
-              padding: "8px 20px", borderRadius: 6, cursor: "pointer",
-              fontSize: 13, fontWeight: 600, transition: "all 0.15s",
+              padding: mobile ? "6px 12px" : "8px 20px", borderRadius: 6, cursor: "pointer",
+              fontSize: mobile ? 12 : 13, fontWeight: 600, transition: "all 0.15s",
+              flex: mobile ? "1 1 auto" : "0 0 auto", textAlign: "center",
             }}>{label}</button>
         );
       };
@@ -307,16 +268,17 @@
       const ModelCard = ({ title, color, tagBg, yourProfit, jpadelIncome, descIdx }) => (
         <div style={{
           background: C.card, border: `1px solid ${C.border}`, borderRadius: 10,
-          padding: 22, flex: 1, minWidth: 220, boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+          padding: mobile ? 16 : 22, flex: "1 1 0", minWidth: mobile ? "100%" : 220,
+          boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
         }}>
           <div style={{
             display: "inline-block", padding: "4px 12px", borderRadius: 5,
-            background: tagBg, color, fontWeight: 700, fontSize: 12, marginBottom: 16,
+            background: tagBg, color, fontWeight: 700, fontSize: 12, marginBottom: 12,
           }}>{title}</div>
           <div style={{ color: C.muted, fontSize: 11, fontWeight: 600, marginBottom: 2, textTransform: "uppercase" }}>Your Monthly Profit</div>
-          <div style={{ color: C.text, fontSize: 28, fontWeight: 800, marginBottom: 14 }}>{fmt(yourProfit)}</div>
+          <div style={{ color: C.text, fontSize: mobile ? 22 : 28, fontWeight: 800, marginBottom: 12 }}>{fmt(yourProfit)}</div>
           <div style={{ color: C.muted, fontSize: 11, fontWeight: 600, marginBottom: 2, textTransform: "uppercase" }}>Jpadel Keeps / Month</div>
-          <div style={{ color: C.text, fontSize: 18, fontWeight: 700, marginBottom: 14 }}>{fmt(jpadelIncome)}</div>
+          <div style={{ color: C.text, fontSize: mobile ? 16 : 18, fontWeight: 700, marginBottom: 12 }}>{fmt(jpadelIncome)}</div>
           <EditableText value={getModelDesc(descIdx)} onChange={v => setModelDesc(descIdx, v)}
             multiline style={{ fontSize: 13, color: C.muted, lineHeight: 1.7, display: "block" }} />
         </div>
@@ -324,90 +286,123 @@
 
       const tooltipStyle = {
         background: "#fff", border: `1px solid ${C.border}`, borderRadius: 8,
-        boxShadow: "0 4px 16px rgba(0,0,0,0.1)", fontSize: 13,
+        boxShadow: "0 4px 16px rgba(0,0,0,0.1)", fontSize: 12,
       };
+
+      const chartHeight = mobile ? 240 : 300;
 
       return (
         <div style={{
           background: C.bg, color: C.text,
           fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif",
-          minHeight: "100vh", padding: "28px 24px",
+          minHeight: "100vh", padding: mobile ? "16px 12px" : "28px 24px",
         }}>
           <div style={{ maxWidth: 1000, margin: "0 auto" }}>
-            <header style={{ marginBottom: 28, display: "flex", alignItems: "center", gap: 14 }}>
+            <header style={{ marginBottom: mobile ? 16 : 28, display: "flex", alignItems: "center", gap: 12 }}>
               <div style={{
-                width: 42, height: 42, borderRadius: 8, background: C.brand,
+                width: mobile ? 36 : 42, height: mobile ? 36 : 42, borderRadius: 8, background: C.brand,
                 display: "flex", alignItems: "center", justifyContent: "center",
-                color: "#fff", fontWeight: 900, fontSize: 20, flexShrink: 0,
+                color: "#fff", fontWeight: 900, fontSize: mobile ? 16 : 20, flexShrink: 0,
               }}>AI</div>
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <EditableText value={title} onChange={setTitle}
-                  style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: -0.3, display: "block" }} />
+                  style={{ fontSize: mobile ? 16 : 22, fontWeight: 800, color: C.text, letterSpacing: -0.3, display: "block", wordBreak: "break-word" }} />
                 <EditableText value={subtitle} onChange={setSubtitle}
-                  style={{ color: C.muted, fontSize: 13, fontWeight: 500, display: "block", marginTop: 2 }} />
+                  style={{ color: C.muted, fontSize: mobile ? 12 : 13, fontWeight: 500, display: "block", marginTop: 2 }} />
               </div>
             </header>
 
-            <div style={{ display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
+            <div style={{
+              display: "flex", gap: mobile ? 8 : 12, marginBottom: mobile ? 16 : 24,
+              flexWrap: "wrap",
+            }}>
               <MetricCard labelIdx={0} label={metricLabels[0]} value={fmt(calc.revenuePerMonth)} />
-              <MetricCard labelIdx={1} label={metricLabels[1]} value={`${Math.floor(calc.paybackDays)} days (${Math.round(hardwareCost / calc.revenuePerHour)} hrs)`} sub="Then pure profit" />
+              <MetricCard labelIdx={1} label={metricLabels[1]} value={`${Math.floor(calc.paybackDays)}d (${Math.round(hardwareCost / calc.revenuePerHour)}hrs)`} sub="Then pure profit" />
               <MetricCard labelIdx={2} label={metricLabels[2]} value={fmt(calc.revenuePerYear)} />
               <MetricCard labelIdx={3} label={`${metricLabels[3]} \u00d7 ${numCourts} courts`} value={fmt(calc.revShare.yourProfit * numCourts * 12)} sub="Revenue share model" />
             </div>
 
-            <div style={{ display: "flex", gap: 22, flexWrap: "wrap" }}>
-              <aside style={{
-                background: C.card, border: `1px solid ${C.border}`, borderRadius: 10,
-                padding: 24, width: 264, flexShrink: 0, boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+            {mobile && (
+              <button onClick={() => setShowControls(!showControls)} style={{
+                width: "100%", padding: "10px 16px", marginBottom: 12, borderRadius: 8,
+                background: C.card, border: `1px solid ${C.border}`, cursor: "pointer",
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                fontSize: 13, fontWeight: 700, color: C.text,
               }}>
-                <div style={{
-                  color: C.text, fontWeight: 800, fontSize: 13, marginBottom: 20,
-                  textTransform: "uppercase", letterSpacing: 0.8,
-                  paddingBottom: 10, borderBottom: `2px solid ${C.brand}`,
-                }}>Assumptions</div>
-                <InputSlider label="Charge / Player / Hr" value={chargePerPlayer} onChange={setChargePerPlayer} min={0.5} max={3} step={0.25} prefix="$" />
-                <InputSlider label="Players / Hour" value={playersPerHour} onChange={setPlayersPerHour} min={2} max={4} />
-                <InputSlider label="Avg Hours / Day" value={hoursPerDay} onChange={setHoursPerDay} min={2} max={14} />
-                <InputSlider label="Hardware Cost" value={hardwareCost} onChange={setHardwareCost} min={200} max={800} step={50} prefix="$" />
-                <InputSlider label="Monthly OpEx" value={monthlyCost} onChange={setMonthlyCost} min={10} max={300} step={10} prefix="$" />
-                <InputSlider label="Courts to Model" value={numCourts} onChange={setNumCourts} min={1} max={50} />
-                <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 20, marginTop: 4 }}>
-                  <div style={{ color: C.text, fontWeight: 800, fontSize: 12, marginBottom: 16, textTransform: "uppercase", letterSpacing: 0.8 }}>Phase 2 Settings</div>
-                  <InputSlider label="Rev Share %" value={revSharePct} onChange={setRevSharePct} min={10} max={100} suffix="%" />
-                  <InputSlider label="Fixed Fee / Month" value={fixedFee} onChange={setFixedFee} min={50} max={500} step={10} prefix="$" />
-                  <InputSlider label="Hybrid: Fixed Part" value={hybridFixed} onChange={setHybridFixed} min={25} max={200} step={25} prefix="$" />
-                  <InputSlider label="Hybrid: Share %" value={hybridPct} onChange={setHybridPct} min={5} max={30} suffix="%" />
-                </div>
-              </aside>
+                <span>{showControls ? "Hide" : "Show"} Assumptions & Settings</span>
+                <span style={{ fontSize: 18, transform: showControls ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>{"\u25bc"}</span>
+              </button>
+            )}
+
+            <div style={{
+              display: "flex", gap: mobile ? 0 : 22,
+              flexDirection: mobile ? "column" : "row",
+            }}>
+              {(showControls || !mobile) && (
+                <aside style={{
+                  background: C.card, border: `1px solid ${C.border}`, borderRadius: 10,
+                  padding: mobile ? 18 : 24,
+                  width: mobile ? "100%" : 264,
+                  flexShrink: 0,
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+                  marginBottom: mobile ? 12 : 0,
+                }}>
+                  <div style={{
+                    color: C.text, fontWeight: 800, fontSize: 13, marginBottom: 18,
+                    textTransform: "uppercase", letterSpacing: 0.8,
+                    paddingBottom: 10, borderBottom: `2px solid ${C.brand}`,
+                  }}>Assumptions</div>
+                  <InputSlider label="Charge / Player / Hr" value={chargePerPlayer} onChange={setChargePerPlayer} min={0.5} max={3} step={0.25} prefix="$" />
+                  <InputSlider label="Players / Hour" value={playersPerHour} onChange={setPlayersPerHour} min={2} max={4} />
+                  <InputSlider label="Avg Hours / Day" value={hoursPerDay} onChange={setHoursPerDay} min={2} max={14} />
+                  <InputSlider label="Hardware Cost" value={hardwareCost} onChange={setHardwareCost} min={200} max={800} step={50} prefix="$" />
+                  <InputSlider label="Monthly OpEx" value={monthlyCost} onChange={setMonthlyCost} min={10} max={300} step={10} prefix="$" />
+                  <InputSlider label="Courts to Model" value={numCourts} onChange={setNumCourts} min={1} max={50} />
+                  <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 18, marginTop: 4 }}>
+                    <div style={{ color: C.text, fontWeight: 800, fontSize: 12, marginBottom: 14, textTransform: "uppercase", letterSpacing: 0.8 }}>Phase 2 Settings</div>
+                    <InputSlider label="Rev Share %" value={revSharePct} onChange={setRevSharePct} min={10} max={100} suffix="%" />
+                    <InputSlider label="Fixed Fee / Month" value={fixedFee} onChange={setFixedFee} min={50} max={500} step={10} prefix="$" />
+                    <InputSlider label="Hybrid: Fixed Part" value={hybridFixed} onChange={setHybridFixed} min={25} max={200} step={25} prefix="$" />
+                    <InputSlider label="Hybrid: Share %" value={hybridPct} onChange={setHybridPct} min={5} max={30} suffix="%" />
+                  </div>
+                </aside>
+              )}
 
               <main style={{ flex: 1, minWidth: 0 }}>
-                <nav role="tablist" style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
-                  <Tab id="overview" label="Model Comparison" />
-                  <Tab id="projection" label="12-Month Projection" />
+                <nav role="tablist" style={{
+                  display: "flex", gap: mobile ? 4 : 6, marginBottom: mobile ? 12 : 20,
+                  flexWrap: mobile ? "wrap" : "nowrap",
+                }}>
+                  <Tab id="overview" label="Comparison" />
+                  <Tab id="projection" label="12-Month" />
                   <Tab id="scaling" label="Scaling" />
-                  <Tab id="pitch" label="Pitch Points" />
+                  <Tab id="pitch" label="Pitch" />
                 </nav>
 
                 {activeTab === "overview" && (
                   <div role="tabpanel">
-                    <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 24 }}>
-                      <ModelCard title={`Revenue Share (${revSharePct}%)`} color={C.brandDeep} tagBg={C.lightBrand}
+                    <div style={{
+                      display: "flex", gap: mobile ? 10 : 14,
+                      flexDirection: mobile ? "column" : "row",
+                      marginBottom: mobile ? 16 : 24,
+                    }}>
+                      <ModelCard title={`Rev Share (${revSharePct}%)`} color={C.brandDeep} tagBg={C.lightBrand}
                         yourProfit={calc.revShare.yourProfit} jpadelIncome={calc.revShare.jpadelMonthly} descIdx={0} />
-                      <ModelCard title={`Fixed Fee ($${fixedFee}/mo)`} color={C.green} tagBg={C.lightGreen}
+                      <ModelCard title={`Fixed ($${fixedFee}/mo)`} color={C.green} tagBg={C.lightGreen}
                         yourProfit={calc.fixed.yourProfit} jpadelIncome={calc.fixed.jpadelMonthly} descIdx={1} />
-                      <ModelCard title={`Hybrid ($${hybridFixed} + ${hybridPct}%)`} color={C.amber} tagBg={C.lightAmber}
+                      <ModelCard title={`Hybrid ($${hybridFixed}+${hybridPct}%)`} color={C.amber} tagBg={C.lightAmber}
                         yourProfit={calc.hybrid.yourProfit} jpadelIncome={calc.hybrid.jpadelMonthly} descIdx={2} />
                     </div>
-                    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: mobile ? 14 : 24, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
                       <EditableText value={chartTitles.split} onChange={v => setChartTitle("split", v)}
-                        style={{ color: C.text, fontWeight: 700, fontSize: 15, display: "block", marginBottom: 18 }} />
-                      <ResponsiveContainer width="100%" height={270}>
-                        <BarChart data={comparisonData} barGap={6}>
+                        style={{ color: C.text, fontWeight: 700, fontSize: mobile ? 14 : 15, display: "block", marginBottom: 14 }} />
+                      <ResponsiveContainer width="100%" height={chartHeight}>
+                        <BarChart data={comparisonData} barGap={4}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#E2E6ED" />
-                          <XAxis dataKey="name" tick={{ fill: C.muted, fontSize: 12 }} />
-                          <YAxis tick={{ fill: C.muted, fontSize: 11 }} tickFormatter={v => `$${v}`} />
+                          <XAxis dataKey="name" tick={{ fill: C.muted, fontSize: mobile ? 10 : 12 }} />
+                          <YAxis tick={{ fill: C.muted, fontSize: 11 }} tickFormatter={v => `$${v}`} width={mobile ? 45 : 60} />
                           <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`$${v}`, '']} />
-                          <Legend />
+                          <Legend wrapperStyle={{ fontSize: mobile ? 11 : 12 }} />
                           <Bar dataKey="you" name="Your Profit" fill={C.brand} radius={[4, 4, 0, 0]} />
                           <Bar dataKey="jpadel" name="Jpadel Keeps" fill={C.green} radius={[4, 4, 0, 0]} />
                         </BarChart>
@@ -417,32 +412,32 @@
                 )}
 
                 {activeTab === "projection" && (
-                  <div role="tabpanel" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                  <div role="tabpanel" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: mobile ? 14 : 24, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
                     <EditableText value={chartTitles.cumulative} onChange={v => setChartTitle("cumulative", v)}
-                      style={{ color: C.text, fontWeight: 700, fontSize: 15, display: "block", marginBottom: 2 }} />
+                      style={{ color: C.text, fontWeight: 700, fontSize: mobile ? 14 : 15, display: "block", marginBottom: 2 }} />
                     <EditableText value={chartTitles.cumulativeSub} onChange={v => setChartTitle("cumulativeSub", v)}
-                      style={{ color: C.muted, fontSize: 13, display: "block", marginBottom: 20 }} />
-                    <ResponsiveContainer width="100%" height={320}>
+                      style={{ color: C.muted, fontSize: 13, display: "block", marginBottom: 16 }} />
+                    <ResponsiveContainer width="100%" height={chartHeight}>
                       <LineChart data={cumulativeData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#E2E6ED" />
-                        <XAxis dataKey="month" tick={{ fill: C.muted, fontSize: 11 }} />
-                        <YAxis tick={{ fill: C.muted, fontSize: 11 }} tickFormatter={v => `$${v}`} />
+                        <XAxis dataKey="month" tick={{ fill: C.muted, fontSize: mobile ? 9 : 11 }} />
+                        <YAxis tick={{ fill: C.muted, fontSize: 11 }} tickFormatter={v => `$${v}`} width={mobile ? 45 : 60} />
                         <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`$${v}`, '']} />
-                        <Legend />
+                        <Legend wrapperStyle={{ fontSize: mobile ? 11 : 12 }} />
                         <Line type="monotone" dataKey="revShare" name={`Rev Share ${revSharePct}%`} stroke={C.brand} strokeWidth={2.5} dot={false} />
                         <Line type="monotone" dataKey="fixedFee" name={`Fixed $${fixedFee}`} stroke={C.green} strokeWidth={2.5} dot={false} />
                         <Line type="monotone" dataKey="hybrid" name="Hybrid" stroke={C.amber} strokeWidth={2.5} dot={false} />
                       </LineChart>
                     </ResponsiveContainer>
-                    <div style={{ display: "flex", gap: 28, marginTop: 20, flexWrap: "wrap", justifyContent: "center" }}>
+                    <div style={{ display: "flex", gap: mobile ? 12 : 28, marginTop: 16, flexWrap: "wrap", justifyContent: "center" }}>
                       {[
-                        { label: "Rev Share (12mo)", value: cumulativeData[11]?.revShare, color: C.brandDark },
-                        { label: "Fixed Fee (12mo)", value: cumulativeData[11]?.fixedFee, color: C.green },
-                        { label: "Hybrid (12mo)", value: cumulativeData[11]?.hybrid, color: C.amber },
+                        { label: "Rev Share", value: cumulativeData[11]?.revShare, color: C.brandDark },
+                        { label: "Fixed Fee", value: cumulativeData[11]?.fixedFee, color: C.green },
+                        { label: "Hybrid", value: cumulativeData[11]?.hybrid, color: C.amber },
                       ].map(({ label, value, color }) => (
                         <div key={label} style={{ textAlign: "center" }}>
-                          <div style={{ color: C.muted, fontSize: 11, fontWeight: 600, marginBottom: 2 }}>{label}</div>
-                          <div style={{ color, fontWeight: 800, fontSize: 22 }}>{fmt(value)}</div>
+                          <div style={{ color: C.muted, fontSize: 11, fontWeight: 600, marginBottom: 2 }}>{label} (12mo)</div>
+                          <div style={{ color, fontWeight: 800, fontSize: mobile ? 18 : 22 }}>{fmt(value)}</div>
                         </div>
                       ))}
                     </div>
@@ -450,45 +445,45 @@
                 )}
 
                 {activeTab === "scaling" && (
-                  <div role="tabpanel" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                  <div role="tabpanel" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: mobile ? 14 : 24, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
                     <EditableText value={chartTitles.scaling} onChange={v => setChartTitle("scaling", v)}
-                      style={{ color: C.text, fontWeight: 700, fontSize: 15, display: "block", marginBottom: 2 }} />
+                      style={{ color: C.text, fontWeight: 700, fontSize: mobile ? 14 : 15, display: "block", marginBottom: 2 }} />
                     <EditableText value={chartTitles.scalingSub} onChange={v => setChartTitle("scalingSub", v)}
-                      style={{ color: C.muted, fontSize: 13, display: "block", marginBottom: 20 }} />
-                    <ResponsiveContainer width="100%" height={320}>
+                      style={{ color: C.muted, fontSize: 13, display: "block", marginBottom: 16 }} />
+                    <ResponsiveContainer width="100%" height={chartHeight}>
                       <BarChart data={scalingData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#E2E6ED" />
-                        <XAxis dataKey="courts" tick={{ fill: C.muted, fontSize: 11 }} label={{ value: "Courts", fill: C.muted, position: "bottom", offset: -5 }} />
-                        <YAxis tick={{ fill: C.muted, fontSize: 11 }} tickFormatter={v => v >= 1000 ? `$${(v/1000).toFixed(0)}k` : `$${v}`} />
+                        <XAxis dataKey="courts" tick={{ fill: C.muted, fontSize: 11 }} />
+                        <YAxis tick={{ fill: C.muted, fontSize: 10 }} tickFormatter={v => v >= 1000 ? `$${(v/1000).toFixed(0)}k` : `$${v}`} width={mobile ? 45 : 60} />
                         <Tooltip contentStyle={tooltipStyle} formatter={(v) => [fmtK(v), '']} />
-                        <Legend />
-                        <Bar dataKey="revShare" name="Revenue Share" fill={C.brand} radius={[4, 4, 0, 0]} />
+                        <Legend wrapperStyle={{ fontSize: mobile ? 11 : 12 }} />
+                        <Bar dataKey="revShare" name="Rev Share" fill={C.brand} radius={[4, 4, 0, 0]} />
                         <Bar dataKey="fixedFee" name="Fixed Fee" fill={C.green} radius={[4, 4, 0, 0]} />
                         <Bar dataKey="hybrid" name="Hybrid" fill={C.amber} radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
-                    <div style={{ marginTop: 20, padding: 16, background: C.lightBrand, borderRadius: 8, border: `1px solid #BFDBFE` }}>
-                      <div style={{ color: C.brandDeep, fontWeight: 700, fontSize: 13, marginBottom: 4 }}>At {numCourts} courts (current slider)</div>
+                    <div style={{ marginTop: 16, padding: mobile ? 12 : 16, background: C.lightBrand, borderRadius: 8, border: `1px solid #BFDBFE` }}>
+                      <div style={{ color: C.brandDeep, fontWeight: 700, fontSize: 13, marginBottom: 4 }}>At {numCourts} courts</div>
                       <div style={{ color: C.text, fontSize: 13, lineHeight: 1.7 }}>
-                        Hardware investment: {fmt(numCourts * hardwareCost)} {"\u00b7 "}
-                        Your annual profit: {fmtK(calc.revShare.yourProfit * numCourts * 12)} (rev share) / {fmtK(calc.fixed.yourProfit * numCourts * 12)} (fixed) / {fmtK(calc.hybrid.yourProfit * numCourts * 12)} (hybrid)
+                        Investment: {fmt(numCourts * hardwareCost)} {"\u00b7"} Profit: {fmt(calc.revShare.yourProfit * numCourts * 12)} (rev share) / {fmt(calc.fixed.yourProfit * numCourts * 12)} (fixed) / {fmt(calc.hybrid.yourProfit * numCourts * 12)} (hybrid)
                       </div>
                     </div>
                   </div>
                 )}
 
                 {activeTab === "pitch" && (
-                  <div role="tabpanel" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  <div role="tabpanel" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     {pitchItems.map((item, i) => (
                       <div key={i} style={{
-                        background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 20,
-                        display: "flex", gap: 16, alignItems: "flex-start",
+                        background: C.card, border: `1px solid ${C.border}`, borderRadius: 10,
+                        padding: mobile ? 14 : 20,
+                        display: "flex", gap: mobile ? 10 : 16, alignItems: "flex-start",
                         boxShadow: "0 1px 3px rgba(0,0,0,0.06)", borderLeft: `3px solid ${C.brand}`,
                       }}>
-                        <span style={{ fontSize: 28, lineHeight: 1 }} role="img">{item.icon}</span>
-                        <div style={{ flex: 1 }}>
+                        <span style={{ fontSize: mobile ? 22 : 28, lineHeight: 1 }} role="img">{item.icon}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
                           <EditableText value={getPitchTitle(i)} onChange={v => setPitchField(i, "title", v)}
-                            style={{ color: C.text, fontWeight: 700, fontSize: 15, display: "block", marginBottom: 4 }} />
+                            style={{ color: C.text, fontWeight: 700, fontSize: mobile ? 14 : 15, display: "block", marginBottom: 4 }} />
                           <EditableText value={getPitchBody(i)} onChange={v => setPitchField(i, "body", v)}
                             multiline style={{ color: C.muted, fontSize: 13, lineHeight: 1.7, display: "block" }} />
                         </div>
@@ -500,11 +495,12 @@
             </div>
 
             <footer style={{
-              marginTop: 28, paddingTop: 14, borderTop: `1px solid ${C.border}`,
-              color: C.warmGray, fontSize: 11, display: "flex", justifyContent: "space-between",
+              marginTop: mobile ? 16 : 28, paddingTop: 12, borderTop: `1px solid ${C.border}`,
+              color: C.warmGray, fontSize: 11,
+              display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 4,
             }}>
-              <span>WCAG 2.1 AA compliant {"\u00b7"} All text {"\u2265"} 4.5:1 contrast</span>
-              <span>AI Camera Business {"\u00b7"} Financial Model v1.0</span>
+              <span>WCAG 2.1 AA compliant</span>
+              <span>AI Camera Business {"\u00b7"} v1.0</span>
             </footer>
           </div>
         </div>
