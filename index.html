@@ -150,11 +150,11 @@
       ]);
       const setMetricLabel = (i, v) => setMetricLabels(prev => { const n = [...prev]; n[i] = v; return n; });
 
-      const modelDescs = [
+      const [modelDescs, setModelDescs] = useState([
         (rp, rev) => `You take ${rp}% of the $${rev}/mo revenue. Scales with utilization. Jpadel is incentivized to book more hours.`,
         (ff) => `Predictable SaaS income. Jpadel keeps all upside above $${ff}. You earn the same regardless of utilization.`,
         (hf, hp) => `Guaranteed base of $${hf} + ${hp}% of remainder. Balances predictability with upside.`,
-      ];
+      ]);
       const [modelDescOverrides, setModelDescOverrides] = useState([null, null, null]);
       const setModelDesc = (i, v) => setModelDescOverrides(prev => { const n = [...prev]; n[i] = v; return n; });
 
@@ -202,9 +202,6 @@
         };
         return { revenuePerHour, revenuePerDay, revenuePerMonth, revenuePerYear, paybackDays, revShare, fixed, hybrid };
       }, [chargePerPlayer, playersPerHour, hoursPerDay, hardwareCost, monthlyCost, revSharePct, fixedFee, hybridFixed, hybridPct]);
-
-      const fmt = (n) => `$${Math.round(n).toLocaleString()}`;
-      const fmtK = (n) => n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : `$${n}`;
 
       const getModelDesc = (i) => {
         if (modelDescOverrides[i]) return modelDescOverrides[i];
@@ -263,6 +260,9 @@
         cumulativeData[i].fixedFee = cumulativeData[i - 1].fixedFee + Math.round(calc.fixed.yourProfit);
         cumulativeData[i].hybrid = cumulativeData[i - 1].hybrid + Math.round(calc.hybrid.yourProfit);
       }
+
+      const fmt = (n) => `$${Math.round(n).toLocaleString()}`;
+      const fmtK = (n) => n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : `$${n}`;
 
       const InputSlider = ({ label, value, onChange, min, max, step = 1, prefix = "", suffix = "" }) => (
         <div style={{ marginBottom: 20 }}>
@@ -352,7 +352,7 @@
               <MetricCard labelIdx={0} label={metricLabels[0]} value={fmt(calc.revenuePerMonth)} />
               <MetricCard labelIdx={1} label={metricLabels[1]} value={`${Math.floor(calc.paybackDays)} days (${Math.round(hardwareCost / calc.revenuePerHour)} hrs)`} sub="Then pure profit" />
               <MetricCard labelIdx={2} label={metricLabels[2]} value={fmt(calc.revenuePerYear)} />
-              <MetricCard labelIdx={3} label={`${metricLabels[3]} \u00d7 ${numCourts} courts`} value={fmtK(calc.revShare.yourProfit * numCourts * 12)} sub="Revenue share model" />
+              <MetricCard labelIdx={3} label={`${metricLabels[3]} \u00d7 ${numCourts} courts`} value={fmt(calc.revShare.yourProfit * numCourts * 12)} sub="Revenue share model" />
             </div>
 
             <div style={{ display: "flex", gap: 22, flexWrap: "wrap" }}>
@@ -373,8 +373,8 @@
                 <InputSlider label="Courts to Model" value={numCourts} onChange={setNumCourts} min={1} max={50} />
                 <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 20, marginTop: 4 }}>
                   <div style={{ color: C.text, fontWeight: 800, fontSize: 12, marginBottom: 16, textTransform: "uppercase", letterSpacing: 0.8 }}>Phase 2 Settings</div>
-                  <InputSlider label="Rev Share %" value={revSharePct} onChange={setRevSharePct} min={10} max={50} suffix="%" />
-                  <InputSlider label="Fixed Fee / Month" value={fixedFee} onChange={setFixedFee} min={50} max={300} step={10} prefix="$" />
+                  <InputSlider label="Rev Share %" value={revSharePct} onChange={setRevSharePct} min={10} max={100} suffix="%" />
+                  <InputSlider label="Fixed Fee / Month" value={fixedFee} onChange={setFixedFee} min={50} max={500} step={10} prefix="$" />
                   <InputSlider label="Hybrid: Fixed Part" value={hybridFixed} onChange={setHybridFixed} min={25} max={200} step={25} prefix="$" />
                   <InputSlider label="Hybrid: Share %" value={hybridPct} onChange={setHybridPct} min={5} max={30} suffix="%" />
                 </div>
